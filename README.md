@@ -8,6 +8,8 @@
 
 ATLAS (Adaptive Task & Logic Automation System) is a Model Context Protocol server that provides hierarchical task management capabilities to Large Language Models. This tool provides LLMs with the structure and context needed to manage complex tasks and dependencies.
 
+<a href="https://glama.ai/mcp/servers/b8veo1exod"><img width="380" height="200" src="https://glama.ai/mcp/servers/b8veo1exod/badge" alt="atlas-mcp-server MCP server" /></a>
+
 ## Table of Contents
 
 - [Overview](#overview)
