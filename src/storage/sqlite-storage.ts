@@ -450,17 +450,9 @@ export class SqliteStorage implements TaskStorage {
                 return [];
             }
 
-            // Get all tasks that are either:
-            // 1. Listed in parent's subtasks array
-            // 2. Have this parent_path set
-            const subtaskPaths = parent.subtasks;
-            const placeholders = subtaskPaths.map(() => '?').join(',');
-            
+            // Get tasks that have this parent path
             const rows = await this.db.all<Record<string, unknown>[]>(
-                `SELECT * FROM tasks WHERE 
-                 path IN (${placeholders || "''"}) OR 
-                 parent_path = ?`,
-                ...subtaskPaths,
+                `SELECT * FROM tasks WHERE parent_path = ?`,
                 parentPath
             );
 

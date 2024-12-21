@@ -167,7 +167,7 @@ export class TaskStore {
                 parentUpdates.set(parentPath, parent);
             }
 
-            // Third pass: validate relationships and update parent subtasks
+            // Third pass: validate and synchronize parent-child relationships
             for (const task of tasksToSave.values()) {
                 if (task.parentPath) {
                     const parent = parentUpdates.get(task.parentPath);
@@ -181,11 +181,40 @@ export class TaskStore {
                         );
                     }
 
-                    // Update parent's subtasks if needed
+                    // Ensure bidirectional consistency
                     if (!parent.subtasks.includes(task.path)) {
                         parent.subtasks = [...parent.subtasks, task.path];
                         parentUpdates.set(parent.path, parent);
                     }
+                } else {
+                    // If no parent path, ensure task is not in any parent's subtasks
+                    for (const potentialParent of parentUpdates.values()) {
+                        if (potentialParent.subtasks.includes(task.path)) {
+                            potentialParent.subtasks = potentialParent.subtasks.filter(p => p !== task.path);
+                            parentUpdates.set(potentialParent.path, potentialParent);
+                        }
+                    }
+                }
+
+                // Ensure task's subtasks array is consistent with children's parentPath
+                const childrenToRemove: string[] = [];
+                for (const childPath of task.subtasks) {
+                    const child = tasksToSave.get(childPath);
+                    if (child) {
+                        if (child.parentPath !== task.path) {
+                            childrenToRemove.push(childPath);
+                        }
+                    } else {
+                        // Child not in current batch, load from storage
+                        const existingChild = await this.getTaskByPath(childPath);
+                        if (!existingChild || existingChild.parentPath !== task.path) {
+                            childrenToRemove.push(childPath);
+                        }
+                    }
+                }
+                if (childrenToRemove.length > 0) {
+                    task.subtasks = task.subtasks.filter(p => !childrenToRemove.includes(p));
+                    tasksToSave.set(task.path, task);
                 }
             }
 
@@ -335,36 +364,20 @@ export class TaskStore {
         }
 
         try {
-            // Get indexed tasks first
-            const indexedTasks = await this.indexManager.getTasksByParent(parentPath);
-            
-            // Batch process cache checks
-            const tasks: Task[] = [];
-            const missingPaths: string[] = [];
-
-            await this.processBatch(indexedTasks, async indexedTask => {
-                const cachedTask = await this.cacheManager.get(indexedTask.path);
-                if (cachedTask) {
-                    tasks.push(cachedTask);
-                } else {
-                    missingPaths.push(indexedTask.path);
-                }
-            });
-
-            // If all tasks were cached, return them
-            if (missingPaths.length === 0) {
-                return tasks;
+            // Get the parent task first
+            const parentTask = await this.getTaskByPath(parentPath);
+            if (!parentTask) {
+                return [];
             }
 
-            // Load missing tasks from storage
-            const storageTasks = await this.storage.getSubtasks(parentPath);
-
-            // Update cache and indexes for missing tasks
-            await this.processBatch(storageTasks, async task => {
-                await this.indexManager.indexTask(task);
-                await this.cacheManager.set(task.path, task);
-                tasks.push(task);
-            });
+            // Get all tasks that are listed in parent's subtasks array
+            const tasks: Task[] = [];
+            for (const childPath of parentTask.subtasks) {
+                const task = await this.getTaskByPath(childPath);
+                if (task) {
+                    tasks.push(task);
+                }
+            }
 
             return tasks;
         } catch (error) {

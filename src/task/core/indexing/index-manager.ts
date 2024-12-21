@@ -83,14 +83,22 @@ export class TaskIndexManager {
             }
             statusPaths.add(task.path);
 
-            // Update parent index
+            // Update parent index and parent's subtasks
             if (task.parentPath) {
+                // Update parent index
                 let children = this.parentIndex.get(task.parentPath);
                 if (!children) {
                     children = new Set();
                     this.parentIndex.set(task.parentPath, children);
                 }
                 children.add(task.path);
+
+                // Update parent's subtasks array
+                const parentTask = this.taskIndexes.get(task.parentPath);
+                if (parentTask && !parentTask.subtasks.includes(task.path)) {
+                    parentTask.subtasks = [...parentTask.subtasks, task.path];
+                    this.taskIndexes.set(task.parentPath, parentTask);
+                }
             }
 
             // Update dependency index
