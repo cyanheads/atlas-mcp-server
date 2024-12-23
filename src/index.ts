@@ -68,16 +68,13 @@ export class AtlasServerBootstrap {
     private async initialize(): Promise<void> {
         try {
             // Initialize storage with proper configuration
-            const storageDir = `${this.storageConfig.baseDir}/ATLAS`;
-            
             // Ensure storage directory exists with proper permissions
-            await fs.mkdir(storageDir, { recursive: true, mode: 0o755 });
-            await fs.chmod(storageDir, 0o755);  // Ensure directory is readable/writable
+            await fs.mkdir(this.storageConfig.baseDir, { recursive: true, mode: 0o755 });
+            await fs.chmod(this.storageConfig.baseDir, 0o755);  // Ensure directory is readable/writable
             
             // Configure storage
             const storageConfig = {
                 ...this.storageConfig,
-                baseDir: storageDir,
                 name: 'atlas-tasks',
                 connection: {
                     ...this.storageConfig.connection,
