@@ -171,7 +171,60 @@ export class TaskManager {
     }
 
     /**
-     * Updates an existing task
+     * Calculate aggregate status based on subtask statuses
+     */
+    private async calculateAggregateStatus(task: Task): Promise<TaskStatus> {
+        const subtasks = await this.storage.getSubtasks(task.path);
+        if (!subtasks.length) {
+            return task.status;
+        }
+
+        const statuses = subtasks.map(t => t.status);
+        
+        // If any subtask is BLOCKED, parent is BLOCKED
+        if (statuses.includes(TaskStatus.BLOCKED)) {
+            return TaskStatus.BLOCKED;
+        }
+        
+        // If any subtask is IN_PROGRESS, parent is IN_PROGRESS
+        if (statuses.includes(TaskStatus.IN_PROGRESS)) {
+            return TaskStatus.IN_PROGRESS;
+        }
+        
+        // If all subtasks are COMPLETED, parent is COMPLETED
+        if (statuses.every(s => s === TaskStatus.COMPLETED)) {
+            return TaskStatus.COMPLETED;
+        }
+        
+        // If any subtask is FAILED, parent is FAILED
+        if (statuses.includes(TaskStatus.FAILED)) {
+            return TaskStatus.FAILED;
+        }
+        
+        // Default to PENDING
+        return TaskStatus.PENDING;
+    }
+
+    /**
+     * Check if task should be blocked based on dependencies
+     */
+    private async checkDependencyStatus(task: Task): Promise<boolean> {
+        if (!task.dependencies.length) {
+            return false;
+        }
+
+        for (const depPath of task.dependencies) {
+            const depTask = await this.getTaskByPath(depPath);
+            if (!depTask || depTask.status !== TaskStatus.COMPLETED) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Updates an existing task with status propagation
      */
     async updateTask(path: string, updates: UpdateTaskInput): Promise<TaskResponse<Task>> {
         try {
@@ -222,13 +275,22 @@ export class TaskManager {
                     delete metadata.dependencies;
                 }
 
+                // Determine task status
+                let newStatus = updates.status || task.status;
+                
+                // Check if task should be blocked by dependencies
+                const isBlocked = await this.checkDependencyStatus(task);
+                if (isBlocked) {
+                    newStatus = TaskStatus.BLOCKED;
+                }
+
                 // Update task fields
                 const updatedTask: Task = {
                     ...task,
                     name: updates.name || task.name,
                     description: updates.description !== undefined ? updates.description : task.description,
                     type: updates.type || task.type,
-                    status: updates.status || task.status,
+                    status: newStatus,
                     parentPath: updates.parentPath !== undefined ? (updates.parentPath || undefined) : task.parentPath,
                     notes: updates.notes || task.notes,
                     reasoning: updates.reasoning || task.reasoning,
@@ -241,7 +303,31 @@ export class TaskManager {
                     }
                 };
 
+                // Save the updated task
                 await this.storage.saveTask(updatedTask);
+
+                // Update parent status if needed
+                const affectedPaths = [updatedTask.path];
+                if (updatedTask.parentPath) {
+                    const parent = await this.getTaskByPath(updatedTask.parentPath);
+                    if (parent) {
+                        const parentStatus = await this.calculateAggregateStatus(parent);
+                        if (parentStatus !== parent.status) {
+                            const updatedParent = {
+                                ...parent,
+                                status: parentStatus,
+                                metadata: {
+                                    ...parent.metadata,
+                                    updated: Date.now(),
+                                    version: parent.metadata.version + 1
+                                }
+                            };
+                            await this.storage.saveTask(updatedParent);
+                            affectedPaths.push(parent.path);
+                        }
+                    }
+                }
+
                 await this.storage.commitTransaction();
 
                 return {
@@ -251,7 +337,7 @@ export class TaskManager {
                         timestamp: Date.now(),
                         requestId: Math.random().toString(36).substring(7),
                         projectPath: updatedTask.metadata.projectPath,
-                        affectedPaths: [updatedTask.path]
+                        affectedPaths
                     }
                 };
             } catch (error) {
@@ -412,37 +498,26 @@ export class TaskManager {
             const tasks = await this.storage.getTasksByPattern('*');
             const taskCount = tasks.length;
 
-            // Start transaction for clearing all tasks
-            await this.storage.beginTransaction();
+            // Clear all tasks directly through storage
+            await this.storage.clearAllTasks();
 
-            try {
-                // Clear all tasks and reset database
-                await this.storage.clearAllTasks();
+            // Clear all caches and force cleanup
+            await this.clearCaches();
 
-                // Clear all caches and force cleanup
-                await this.clearCaches();
-
-                // Force garbage collection if available
-                if (global.gc) {
-                    global.gc();
-                }
-
-                await this.storage.commitTransaction();
-
-                // After transaction is committed, optimize the database
-                await this.storage.vacuum();
-                await this.storage.analyze();
-                await this.storage.checkpoint();
-
-                this.logger.info('Database and caches reset', {
-                    tasksCleared: taskCount,
-                    operation: 'clearAllTasks'
-                });
-            } catch (error) {
-                // Rollback transaction on error
-                await this.storage.rollbackTransaction();
-                throw error;
+            // Force garbage collection if available
+            if (global.gc) {
+                global.gc();
             }
+
+            // Optimize the database
+            await this.storage.vacuum();
+            await this.storage.analyze();
+            await this.storage.checkpoint();
+
+            this.logger.info('Database and caches reset', {
+                tasksCleared: taskCount,
+                operation: 'clearAllTasks'
+            });
         } catch (error) {
             this.logger.error('Failed to clear tasks', {
                 error,
