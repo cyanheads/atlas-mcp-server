@@ -1,6 +1,12 @@
 /**
  * Pattern matching utilities for task paths
  */
+import { sep } from 'path';
+
+// Convert path separator to forward slash for consistent pattern matching
+const normalizePath = (path: string): string => path.split(sep).join('/');
+// Convert pattern to use forward slashes
+const normalizePattern = (pattern: string): string => pattern.split(sep).join('/');
 
 /**
  * Converts a glob pattern to a regular expression
@@ -10,7 +16,8 @@
  * - ? for single character matching
  */
 export function globToRegex(pattern: string): RegExp {
-    const escapedPattern = pattern
+    const normalizedPattern = normalizePattern(pattern);
+    const escapedPattern = normalizedPattern
         .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars
         .replace(/\*\*/g, '{{RECURSIVE}}') // Temp placeholder for **
         .replace(/\*/g, '[^/]+') // * matches anything except /
@@ -25,7 +32,7 @@ export function globToRegex(pattern: string): RegExp {
  */
 export function globToSqlPattern(pattern: string): string {
     // Handle special case of root pattern
-    if (pattern === '**') {
+    if (normalizePattern(pattern) === '**') {
         return '%';
     }
 
@@ -56,7 +63,7 @@ export function globToSqlPattern(pattern: string): string {
  * - etc.
  */
 export function generatePathPatterns(path: string): string[] {
-    const segments = path.split('/');
+    const segments = normalizePath(path).split('/');
     const patterns: Set<string> = new Set();
 
     // Add exact path
@@ -98,5 +105,6 @@ export function generatePathPatterns(path: string): string[] {
  * Tests if a path matches a glob pattern
  */
 export function matchesPattern(path: string, pattern: string): boolean {
-    return globToRegex(pattern).test(path);
+    const normalizedPath = normalizePath(path);
+    return globToRegex(pattern).test(normalizedPath);
 }

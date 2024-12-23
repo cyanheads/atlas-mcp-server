@@ -4,7 +4,7 @@
  */
 
 import { createLogger, format, transports, Logger as WinstonLogger, config as winstonConfig } from 'winston';
-import path from 'path';
+import { join, normalize } from 'path';
 import { BaseError, ErrorCodes } from '../errors/index.js';
 import { LogLevel, LogLevels, LoggerConfig } from '../types/logging.js';
 
@@ -118,13 +118,13 @@ export class Logger {
         if (config.file && config.logDir) {
             loggerTransports.push(
                 new transports.File({
-                    filename: path.join(config.logDir, 'error.log'),
+                    filename: normalize(join(config.logDir, 'error.log')),
                     level: LogLevels.ERROR,
                     maxsize: config.maxFileSize,
                     maxFiles: config.maxFiles
                 }),
                 new transports.File({
-                    filename: path.join(config.logDir, 'combined.log'),
+                    filename: normalize(join(config.logDir, 'combined.log')),
                     maxsize: config.maxFileSize,
                     maxFiles: config.maxFiles
                 })

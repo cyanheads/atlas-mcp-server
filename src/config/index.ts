@@ -5,6 +5,7 @@
 
 import { ConfigError, ErrorCodes } from '../errors/index.js';
 import { LogLevel, LogLevels } from '../types/logging.js';
+import { normalize } from 'path';
 
 /**
  * Environment variable names
@@ -228,6 +229,14 @@ export class ConfigManager {
             }
         };
 
+        // Normalize paths in the new config
+        if (newConfig.storage?.baseDir) {
+            newConfig.storage.baseDir = normalize(newConfig.storage.baseDir);
+        }
+        if (newConfig.logging?.dir) {
+            newConfig.logging.dir = normalize(newConfig.logging.dir);
+        }
+
         this.validateConfig(newConfig);
         this.config = newConfig;
     }
@@ -257,6 +266,14 @@ export class ConfigManager {
                 }
             };
 
+            // Normalize paths in the merged config
+            if (mergedConfig.storage?.baseDir) {
+                mergedConfig.storage.baseDir = normalize(mergedConfig.storage.baseDir);
+            }
+            if (mergedConfig.logging?.dir) {
+                mergedConfig.logging.dir = normalize(mergedConfig.logging.dir);
+            }
+
             // Validate final configuration
             this.validateConfig(mergedConfig);
 
@@ -279,7 +296,9 @@ export class ConfigManager {
     private loadEnvConfig(customConfig: any): any {
         const env = process.env[EnvVars.NODE_ENV];
         const logLevel = process.env[EnvVars.LOG_LEVEL];
-        const storageDir = customConfig.storage?.baseDir || process.env[EnvVars.ATLAS_STORAGE_DIR];
+        const rawStorageDir = customConfig.storage?.baseDir || process.env[EnvVars.ATLAS_STORAGE_DIR];
+        // Normalize storage directory path for platform compatibility
+        const storageDir = rawStorageDir ? normalize(rawStorageDir) : undefined;
 
         if (!storageDir) {
             throw new ConfigError(
@@ -290,7 +309,7 @@ export class ConfigManager {
 
         const config: any = {
             storage: {
-                baseDir: storageDir,
+                baseDir: normalize(storageDir),
                 name: 'atlas-tasks',
                 connection: {
                     maxRetries: 3,

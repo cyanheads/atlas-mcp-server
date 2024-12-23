@@ -2,6 +2,8 @@
  * SQLite storage implementation
  */
 import { Database, open } from 'sqlite';
+import { platform } from 'os';
+import { join, normalize, dirname } from 'path';
 import { Task, TaskStatus, CreateTaskInput, UpdateTaskInput } from '../types/task.js';
 import { 
     StorageConfig, 
@@ -49,9 +51,9 @@ export class SqliteStorage implements TaskStorage {
             this.db = null;
         }
 
-        const dbPath = `${this.config.baseDir}/${this.config.name}.db`;
-        const dbWalPath = `${dbPath}-wal`;
-        const dbShmPath = `${dbPath}-shm`;
+        const dbPath = normalize(join(this.config.baseDir, `${this.config.name}.db`));
+        const dbWalPath = normalize(`${dbPath}-wal`);
+        const dbShmPath = normalize(`${dbPath}-shm`);
         this.logger.info('Opening SQLite database', { 
             dbPath,
             baseDir: this.config.baseDir,
@@ -62,12 +64,23 @@ export class SqliteStorage implements TaskStorage {
         try {
             // Import required modules
             const fs = await import('fs/promises');
-            const path = await import('path');
             
-            // Ensure storage directory exists with proper permissions
-            const dirPath = path.dirname(dbPath);
-            await fs.mkdir(dirPath, { recursive: true, mode: 0o750 });
+            // Ensure storage directory exists with platform-specific handling
+            const dirPath = dirname(dbPath);
+            await fs.mkdir(dirPath, { recursive: true });
             
+            // Set permissions on Unix-like systems only
+            if (platform() !== 'win32') {
+                try {
+                    await fs.chmod(dirPath, 0o750);
+                } catch (error) {
+                    this.logger.warn('Failed to set directory permissions, continuing anyway', {
+                        error,
+                        dir: dirPath
+                    });
+                }
+            }
+
             // Clean up any existing WAL files
             try {
                 await fs.unlink(dbWalPath);
@@ -120,15 +133,22 @@ export class SqliteStorage implements TaskStorage {
                         throw err;
                     }
 
-                    // Configure database with proper journal mode
-                    await this.db.exec(`
-                        PRAGMA journal_mode = WAL;
-                        PRAGMA synchronous = NORMAL;
-                        PRAGMA locking_mode = NORMAL;
-                        PRAGMA busy_timeout = 5000;
-                        PRAGMA wal_autocheckpoint = 1000;
-                        PRAGMA foreign_keys = ON;
-                    `);
+                    // Configure database with platform-specific settings
+                    const pragmas = [
+                        // Use WAL mode except on Windows network drives
+                        platform() === 'win32' && dbPath.startsWith('\\\\') 
+                            ? 'PRAGMA journal_mode = DELETE;'
+                            : 'PRAGMA journal_mode = WAL;',
+                        'PRAGMA synchronous = NORMAL;',
+                        'PRAGMA locking_mode = NORMAL;',
+                        'PRAGMA busy_timeout = 5000;',
+                        'PRAGMA wal_autocheckpoint = 1000;',
+                        'PRAGMA foreign_keys = ON;',
+                        // Additional Windows-specific optimizations
+                        platform() === 'win32' ? 'PRAGMA temp_store = MEMORY;' : '',
+                    ].filter(Boolean).join('\n');
+
+                    await this.db.exec(pragmas);
                     
                     // Log database file info
                     const fs = await import('fs/promises');

@@ -9,6 +9,10 @@ import { validateTaskPath, isValidTaskHierarchy } from './types/task.js';
 import { TaskStatusManager } from './task/core/status-manager.js';
 import { TransactionManager } from './storage/transaction-manager.js';
 import { BulkOperationManager } from './task/core/bulk-operation-manager.js';
+import { sep } from 'path';
+
+// Helper function to normalize paths for consistent handling
+const normalizePath = (path: string): string => path.split(sep).join('/');
 
 export class TaskManager {
     private readonly logger: Logger;
@@ -123,22 +127,23 @@ export class TaskManager {
                     delete metadata.dependencies;
                 }
 
+                const normalizedPath = normalizePath(path);
                 const task: Task = {
-                    path,
+                    path: normalizedPath,
                     name: input.name,
                     description: input.description || undefined,
                     type: input.type || TaskType.TASK,
                     status: TaskStatus.PENDING,
-                    parentPath: input.parentPath || undefined,
+                    parentPath: input.parentPath ? normalizePath(input.parentPath) : undefined,
                     notes: input.notes || [],
                     reasoning: input.reasoning || undefined,
-                    dependencies,
+                    dependencies: dependencies.map(normalizePath),
                     subtasks: [],
                     metadata: {
                         ...metadata,
                         created: Date.now(),
                         updated: Date.now(),
-                        projectPath: path.split('/')[0],
+                        projectPath: normalizedPath.split('/')[0],
                         version: 1
                     }
                 };
@@ -184,7 +189,7 @@ export class TaskManager {
      */
     private async checkDependencyStatus(task: Task): Promise<boolean> {
         const result = await this.statusManager.shouldBeBlocked(task, async (path) => {
-            const task = await this.getTaskByPath(path);
+            const task = await this.getTaskByPath(normalizePath(path));
             return task?.status || null;
         });
         return result.blocked;
@@ -195,15 +200,16 @@ export class TaskManager {
      */
     async updateTask(path: string, updates: UpdateTaskInput): Promise<TaskResponse<Task>> {
         try {
-            const task = await this.getTaskByPath(path);
+            const normalizedPath = normalizePath(path);
+            const task = await this.getTaskByPath(normalizedPath);
             if (!task) {
                 throw createError(
                     ErrorCodes.TASK_NOT_FOUND,
                     {
-                        path,
+                        path: normalizedPath,
                         context: 'Task update'
                     },
-                    `Task with path '${path}' not found. Verify the task exists before attempting to update.`
+                    `Task with path '${normalizedPath}' not found. Verify the task exists before attempting to update.`
                 );
             }
 
@@ -216,7 +222,7 @@ export class TaskManager {
                 if (dependencies !== task.dependencies) {
                     const missingDeps = [];
                     for (const depPath of dependencies) {
-                        const depTask = await this.getTaskByPath(depPath);
+                        const depTask = await this.getTaskByPath(normalizePath(depPath));
                         if (!depTask) {
                             missingDeps.push(depPath);
                         }
@@ -225,7 +231,7 @@ export class TaskManager {
                         throw createError(
                             ErrorCodes.INVALID_INPUT,
                             {
-                                path,
+                                path: normalizedPath,
                                 missingDependencies: missingDeps
                             },
                             `Missing dependency tasks: ${missingDeps.join(', ')}. All dependencies must exist before updating task dependencies.`
@@ -270,10 +276,10 @@ export class TaskManager {
                     description: updates.description !== undefined ? updates.description : task.description,
                     type: updates.type || task.type,
                     status: updates.status || task.status,
-                    parentPath: updates.parentPath !== undefined ? (updates.parentPath || undefined) : task.parentPath,
+                    parentPath: updates.parentPath !== undefined ? (updates.parentPath ? normalizePath(updates.parentPath) : undefined) : task.parentPath,
                     notes: updates.notes || task.notes,
                     reasoning: updates.reasoning || task.reasoning,
-                    dependencies,
+                    dependencies: dependencies.map(normalizePath),
                     metadata: {
                         ...task.metadata,
                         ...metadata,
@@ -336,7 +342,7 @@ export class TaskManager {
      */
     async getTaskByPath(path: string): Promise<Task | null> {
         try {
-            return await this.storage.getTask(path);
+            return await this.storage.getTask(normalizePath(path));
         } catch (error) {
             this.logger.error('Failed to get task by path', { error, path });
             throw error;
@@ -348,7 +354,7 @@ export class TaskManager {
      */
     async listTasks(pathPattern: string): Promise<Task[]> {
         try {
-            return await this.storage.getTasksByPattern(pathPattern);
+            return await this.storage.getTasksByPattern(normalizePath(pathPattern));
         } catch (error) {
             this.logger.error('Failed to list tasks', { error, pathPattern });
             throw error;
@@ -372,7 +378,7 @@ export class TaskManager {
      */
     async getSubtasks(parentPath: string): Promise<Task[]> {
         try {
-            return await this.storage.getSubtasks(parentPath);
+            return await this.storage.getSubtasks(normalizePath(parentPath));
         } catch (error) {
             this.logger.error('Failed to get subtasks', { error, parentPath });
             throw error;
@@ -385,32 +391,33 @@ export class TaskManager {
     async deleteTask(path: string): Promise<TaskResponse<void>> {
         try {
             return await this.transactionManager.execute(async () => {
+                const normalizedPath = normalizePath(path);
                 // Verify task exists before attempting deletion
-                const task = await this.getTaskByPath(path);
+                const task = await this.getTaskByPath(normalizedPath);
                 if (!task) {
                     throw createError(
                         ErrorCodes.TASK_NOT_FOUND,
                         {
-                            path,
+                            path: normalizedPath,
                             context: 'Task deletion'
                         },
-                        `Task with path '${path}' not found. Verify the task exists before attempting to delete.`
+                        `Task with path '${normalizedPath}' not found. Verify the task exists before attempting to delete.`
                     );
                 }
 
                 // Get subtasks to include in affected paths
-                const subtasks = await this.storage.getSubtasks(path);
-                const affectedPaths = [path, ...subtasks.map(t => t.path)];
+                const subtasks = await this.storage.getSubtasks(normalizedPath);
+                const affectedPaths = [normalizedPath, ...subtasks.map(t => t.path)];
 
                 // Delete the task and its subtasks
-                await this.storage.deleteTask(path);
+                await this.storage.deleteTask(normalizedPath);
 
                 return {
                     success: true,
                     metadata: {
                         timestamp: Date.now(),
                         requestId: Math.random().toString(36).substring(7),
-                        projectPath: path.split('/')[0],
+                        projectPath: normalizedPath.split('/')[0],
                         affectedPaths
                     }
                 };
@@ -443,7 +450,17 @@ export class TaskManager {
             error?: string;
         }>;
     }> {
-        return this.bulkOperationManager.executeBulkOperations(operations);
+        // Normalize paths in operations
+        const normalizedOperations = operations.map(op => ({
+            ...op,
+            path: normalizePath(op.path),
+            data: op.data ? {
+                ...op.data,
+                path: 'path' in op.data ? normalizePath(op.data.path as string) : undefined,
+                parentPath: 'parentPath' in op.data ? normalizePath(op.data.parentPath as string) : undefined
+            } as CreateTaskInput | UpdateTaskInput : undefined
+        }));
+        return this.bulkOperationManager.executeBulkOperations(normalizedOperations);
     }
 
     /**
@@ -521,10 +538,11 @@ export class TaskManager {
      */
     async repairRelationships(dryRun: boolean = false, pathPattern?: string): Promise<{ fixed: number, issues: string[] }> {
         try {
+            const normalizedPattern = pathPattern ? normalizePath(pathPattern) : undefined;
             const result = await this.storage.repairRelationships(dryRun);
             this.logger.info('Relationship repair completed', { 
                 dryRun,
-                pathPattern,
+                pathPattern: normalizedPattern,
                 fixed: result.fixed,
                 issueCount: result.issues.length
             });
@@ -543,7 +561,7 @@ export class TaskManager {
 
         // Add parent path if provided
         if (input.parentPath) {
-            segments.push(input.parentPath);
+            segments.push(normalizePath(input.parentPath));
         }
 
         // Add task name as final segment

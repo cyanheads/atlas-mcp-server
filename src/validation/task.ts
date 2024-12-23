@@ -2,7 +2,20 @@
  * Task validation module
  */
 import { z } from 'zod';
+import { sep } from 'path';
 import { TaskType, TaskStatus } from '../types/task.js';
+
+// Create platform-agnostic path separator pattern
+const pathSepPattern = sep === '\\' ? '\\\\' : sep;
+// Path segment pattern allowing alphanumeric, underscore, dot, and hyphen
+const pathSegmentPattern = '[a-zA-Z0-9_.-]+';
+// Complete path pattern with platform-agnostic separator
+const pathRegex = new RegExp(`^${pathSegmentPattern}(?:${pathSepPattern}${pathSegmentPattern})*$`);
+
+// Path validation schema
+const pathSchema = z.string()
+    .transform((path: string) => path.split(sep).join('/'))
+    .pipe(z.string().regex(pathRegex));
 
 // Task metadata schema
 const taskMetadataSchema = z.object({
@@ -20,17 +33,15 @@ const taskMetadataSchema = z.object({
 
 // Base task schema
 const baseTaskSchema = z.object({
-    path: z.string()
-        .regex(/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/)
-        .refine(
-            (path) => path.split('/').length <= 8,
-            'Path depth cannot exceed 8 levels'
-        ),
+    path: pathSchema.refine(
+        (path: string) => path.split('/').length <= 8,
+        'Path depth cannot exceed 8 levels'
+    ),
     name: z.string().min(1).max(200),
     description: z.string().max(2000).optional(),
     type: z.nativeEnum(TaskType),
     status: z.nativeEnum(TaskStatus),
-    parentPath: z.string().optional(),
+    parentPath: pathSchema.optional(),
     notes: z.array(z.string().max(1000)).max(100).optional(),
     reasoning: z.string().max(2000).optional(),
     dependencies: z.array(z.string()).max(50),
@@ -40,18 +51,16 @@ const baseTaskSchema = z.object({
 
 // Create task input schema
 export const createTaskSchema = z.object({
-    path: z.string()
-        .regex(/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/)
+    path: pathSchema
         .refine(
-            (path) => !path || path.split('/').length <= 8,
+            (path: string) => !path || path.split('/').length <= 8,
             'Path depth cannot exceed 8 levels'
         )
         .optional(),
     name: z.string().min(1).max(200),
-    parentPath: z.string()
-        .regex(/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/)
+    parentPath: pathSchema
         .refine(
-            (path) => path.split('/').length <= 7, // One less than max to allow for child
+            (path: string) => path.split('/').length <= 7, // One less than max to allow for child
             'Parent path depth cannot exceed 7 levels'
         )
         .optional(),
