@@ -49,11 +49,7 @@ export class SqliteStorage implements TaskStorage {
             this.db = null;
         }
 
-        // Ensure we don't double nest in ATLAS directories
-        const baseDir = this.config.baseDir.endsWith('/ATLAS') ? 
-            this.config.baseDir.slice(0, -6) : 
-            this.config.baseDir;
-        const dbPath = `${baseDir}/${this.config.name}.db`;
+        const dbPath = `${this.config.baseDir}/${this.config.name}.db`;
         const dbWalPath = `${dbPath}-wal`;
         const dbShmPath = `${dbPath}-shm`;
         this.logger.info('Opening SQLite database', { 
