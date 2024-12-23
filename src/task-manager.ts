@@ -6,10 +6,16 @@ import { TaskStorage } from './types/storage.js';
 import { Logger } from './logging/index.js';
 import { ErrorCodes, createError } from './errors/index.js';
 import { validateTaskPath, isValidTaskHierarchy } from './types/task.js';
+import { TaskStatusManager } from './task/core/status-manager.js';
+import { TransactionManager } from './storage/transaction-manager.js';
+import { BulkOperationManager } from './task/core/bulk-operation-manager.js';
 
 export class TaskManager {
-    private logger: Logger;
+    private readonly logger: Logger;
     readonly storage: TaskStorage;
+    private readonly statusManager: TaskStatusManager;
+    private readonly transactionManager: TransactionManager;
+    private readonly bulkOperationManager: BulkOperationManager;
     private memoryMonitor?: NodeJS.Timeout;
     private readonly MAX_CACHE_MEMORY = 512 * 1024 * 1024; // 512MB cache limit
     private readonly MEMORY_CHECK_INTERVAL = 60000; // 1 minute
@@ -17,6 +23,9 @@ export class TaskManager {
     constructor(storage: TaskStorage) {
         this.logger = Logger.getInstance().child({ component: 'TaskManager' });
         this.storage = storage;
+        this.statusManager = new TaskStatusManager();
+        this.transactionManager = new TransactionManager(storage as any);
+        this.bulkOperationManager = new BulkOperationManager(storage);
         this.setupMemoryMonitoring();
     }
 
@@ -54,10 +63,7 @@ export class TaskManager {
                 );
             }
 
-            // Start transaction for task creation
-            await this.storage.beginTransaction();
-
-            try {
+            return await this.transactionManager.execute(async () => {
                 // Check parent path if provided
                 if (input.parentPath) {
                     const parent = await this.getTaskByPath(input.parentPath);
@@ -138,7 +144,6 @@ export class TaskManager {
                 };
 
                 await this.storage.saveTask(task);
-                await this.storage.commitTransaction();
 
                 return {
                     success: true,
@@ -150,11 +155,7 @@ export class TaskManager {
                         affectedPaths: [task.path]
                     }
                 };
-            } catch (error) {
-                // Rollback transaction on error
-                await this.storage.rollbackTransaction();
-                throw error;
-            }
+            });
         } catch (error) {
             this.logger.error('Failed to create task', {
                 error,
@@ -175,52 +176,18 @@ export class TaskManager {
      */
     private async calculateAggregateStatus(task: Task): Promise<TaskStatus> {
         const subtasks = await this.storage.getSubtasks(task.path);
-        if (!subtasks.length) {
-            return task.status;
-        }
-
-        const statuses = subtasks.map(t => t.status);
-        
-        // If any subtask is BLOCKED, parent is BLOCKED
-        if (statuses.includes(TaskStatus.BLOCKED)) {
-            return TaskStatus.BLOCKED;
-        }
-        
-        // If any subtask is IN_PROGRESS, parent is IN_PROGRESS
-        if (statuses.includes(TaskStatus.IN_PROGRESS)) {
-            return TaskStatus.IN_PROGRESS;
-        }
-        
-        // If all subtasks are COMPLETED, parent is COMPLETED
-        if (statuses.every(s => s === TaskStatus.COMPLETED)) {
-            return TaskStatus.COMPLETED;
-        }
-        
-        // If any subtask is FAILED, parent is FAILED
-        if (statuses.includes(TaskStatus.FAILED)) {
-            return TaskStatus.FAILED;
-        }
-        
-        // Default to PENDING
-        return TaskStatus.PENDING;
+        return this.statusManager.calculateAggregateStatus(subtasks.map(t => t.status));
     }
 
     /**
      * Check if task should be blocked based on dependencies
      */
     private async checkDependencyStatus(task: Task): Promise<boolean> {
-        if (!task.dependencies.length) {
-            return false;
-        }
-
-        for (const depPath of task.dependencies) {
-            const depTask = await this.getTaskByPath(depPath);
-            if (!depTask || depTask.status !== TaskStatus.COMPLETED) {
-                return true;
-            }
-        }
-
-        return false;
+        const result = await this.statusManager.shouldBeBlocked(task, async (path) => {
+            const task = await this.getTaskByPath(path);
+            return task?.status || null;
+        });
+        return result.blocked;
     }
 
     /**
@@ -240,10 +207,7 @@ export class TaskManager {
                 );
             }
 
-            // Start transaction for task update
-            await this.storage.beginTransaction();
-
-            try {
+            return await this.transactionManager.execute(async () => {
                 // Extract dependencies from metadata if present
                 const metadataDeps = updates.metadata?.dependencies as string[] | undefined;
                 const dependencies = updates.dependencies || metadataDeps || task.dependencies;
@@ -275,13 +239,28 @@ export class TaskManager {
                     delete metadata.dependencies;
                 }
 
-                // Determine task status
-                let newStatus = updates.status || task.status;
-                
-                // Check if task should be blocked by dependencies
-                const isBlocked = await this.checkDependencyStatus(task);
-                if (isBlocked) {
-                    newStatus = TaskStatus.BLOCKED;
+                // Validate status transition if status is being updated
+                if (updates.status) {
+                    const validation = this.statusManager.validateStatusTransition(
+                        task,
+                        updates.status,
+                        {
+                            dependenciesCompleted: !await this.checkDependencyStatus(task),
+                            hasBlockedDependencies: false, // Will be checked later
+                            hasFailedDependencies: false // Will be checked later
+                        }
+                    );
+                    if (!validation.valid) {
+                        throw createError(
+                            ErrorCodes.TASK_STATUS,
+                            {
+                                currentStatus: task.status,
+                                newStatus: updates.status,
+                                reason: validation.reason
+                            },
+                            validation.reason || 'Invalid status transition'
+                        );
+                    }
                 }
 
                 // Update task fields
@@ -290,7 +269,7 @@ export class TaskManager {
                     name: updates.name || task.name,
                     description: updates.description !== undefined ? updates.description : task.description,
                     type: updates.type || task.type,
-                    status: newStatus,
+                    status: updates.status || task.status,
                     parentPath: updates.parentPath !== undefined ? (updates.parentPath || undefined) : task.parentPath,
                     notes: updates.notes || task.notes,
                     reasoning: updates.reasoning || task.reasoning,
@@ -328,8 +307,6 @@ export class TaskManager {
                     }
                 }
 
-                await this.storage.commitTransaction();
-
                 return {
                     success: true,
                     data: updatedTask,
@@ -340,27 +317,8 @@ export class TaskManager {
                         affectedPaths
                     }
                 };
-            } catch (error) {
-                // Rollback transaction on error
-                await this.storage.rollbackTransaction();
-                throw error;
-            }
+            });
         } catch (error) {
-            // Ensure rollback if transaction was started
-            try {
-                await this.storage.rollbackTransaction();
-            } catch (rollbackError) {
-                // Log rollback error but throw original error
-                this.logger.error('Failed to rollback transaction', {
-                    error: rollbackError,
-                    originalError: error,
-                    context: {
-                        path,
-                        operation: 'updateTask'
-                    }
-                });
-            }
-
             this.logger.error('Failed to update task', {
                 error,
                 context: {
@@ -426,10 +384,7 @@ export class TaskManager {
      */
     async deleteTask(path: string): Promise<TaskResponse<void>> {
         try {
-            // Start transaction for task deletion
-            await this.storage.beginTransaction();
-
-            try {
+            return await this.transactionManager.execute(async () => {
                 // Verify task exists before attempting deletion
                 const task = await this.getTaskByPath(path);
                 if (!task) {
@@ -449,7 +404,6 @@ export class TaskManager {
 
                 // Delete the task and its subtasks
                 await this.storage.deleteTask(path);
-                await this.storage.commitTransaction();
 
                 return {
                     success: true,
@@ -460,11 +414,7 @@ export class TaskManager {
                         affectedPaths
                     }
                 };
-            } catch (error) {
-                // Rollback transaction on error
-                await this.storage.rollbackTransaction();
-                throw error;
-            }
+            });
         } catch (error) {
             this.logger.error('Failed to delete task', {
                 error,
@@ -475,6 +425,25 @@ export class TaskManager {
             });
             throw error;
         }
+    }
+
+    /**
+     * Execute bulk operations
+     */
+    async executeBulkOperations(operations: Array<{
+        type: 'create' | 'update' | 'delete';
+        path: string;
+        data?: CreateTaskInput | UpdateTaskInput;
+    }>): Promise<{
+        success: boolean;
+        results: Array<{
+            success: boolean;
+            operation: string;
+            path: string;
+            error?: string;
+        }>;
+    }> {
+        return this.bulkOperationManager.executeBulkOperations(operations);
     }
 
     /**
@@ -632,29 +601,6 @@ export class TaskManager {
     }
 
     /**
-     * Cleans up resources and closes connections
-     */
-    async cleanup(): Promise<void> {
-        try {
-            // Stop memory monitoring
-            if (this.memoryMonitor) {
-                clearInterval(this.memoryMonitor);
-            }
-
-            // Clear caches
-            await this.clearCaches();
-
-            // Close storage
-            await this.storage.close();
-
-            this.logger.info('Task manager cleanup completed');
-        } catch (error) {
-            this.logger.error('Failed to cleanup task manager', { error });
-            throw error;
-        }
-    }
-
-    /**
      * Gets current memory usage statistics
      */
     getMemoryStats(): { heapUsed: number; heapTotal: number; rss: number } {
@@ -670,6 +616,10 @@ export class TaskManager {
      * Closes the task manager and releases resources
      */
     async close(): Promise<void> {
-        await this.cleanup();
+        if (this.memoryMonitor) {
+            clearInterval(this.memoryMonitor);
+        }
+        await this.clearCaches();
+        await this.storage.close();
     }
 }
