@@ -24,10 +24,25 @@ export function globToRegex(pattern: string): RegExp {
  * Converts a glob pattern to an SQL LIKE/GLOB pattern
  */
 export function globToSqlPattern(pattern: string): string {
-    return pattern
-        .replace(/\*\*/g, '%') // ** for recursive match
-        .replace(/\*/g, '%') // * for single level match
-        .replace(/\?/g, '_'); // ? for single character
+    // Handle special case of root pattern
+    if (pattern === '**') {
+        return '%';
+    }
+
+    // Escape special characters for GLOB
+    let sqlPattern = pattern
+        .replace(/([%_])/g, '\\$1') // Escape SQL wildcards
+        .replace(/\*\*/g, '{{RECURSIVE}}') // Temp placeholder for **
+        .replace(/\*/g, '*') // Keep * for GLOB
+        .replace(/\?/g, '?') // Keep ? for GLOB
+        .replace(/{{RECURSIVE}}/g, '*'); // ** becomes * for recursive GLOB
+
+    // If pattern ends with **, append * to match all children
+    if (pattern.endsWith('**')) {
+        sqlPattern = sqlPattern.slice(0, -1) + '*';
+    }
+
+    return sqlPattern;
 }
 
 /**

@@ -38,7 +38,20 @@ export class SqliteStorage implements TaskStorage {
     }
 
     async initialize(): Promise<void> {
+        // Close any existing connection and force cleanup
+        if (this.db) {
+            try {
+                await this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+                await this.db.close();
+            } catch (err) {
+                this.logger.warn('Error closing existing connection:', { error: err });
+            }
+            this.db = null;
+        }
+
         const dbPath = `${this.config.baseDir}/${this.config.name}.db`;
+        const dbWalPath = `${dbPath}-wal`;
+        const dbShmPath = `${dbPath}-shm`;
         this.logger.info('Opening SQLite database', { 
             dbPath,
             baseDir: this.config.baseDir,
@@ -55,12 +68,13 @@ export class SqliteStorage implements TaskStorage {
             const dirPath = path.dirname(dbPath);
             await fs.mkdir(dirPath, { recursive: true, mode: 0o750 });
             
-            // Log directory contents before
+            // Clean up any existing WAL files
             try {
-                const dirContents = await fs.readdir(dirPath);
-                this.logger.info('Storage directory contents before:', { dirPath, contents: dirContents });
+                await fs.unlink(dbWalPath);
+                await fs.unlink(dbShmPath);
             } catch (err) {
-                this.logger.error('Failed to read directory', { error: err });
+                // Ignore errors if files don't exist
+                this.logger.debug('WAL files cleanup:', { error: err });
             }
 
             // Import sqlite3 with verbose mode for better error messages
@@ -73,12 +87,61 @@ export class SqliteStorage implements TaskStorage {
             // Initialize database with retry support
             await this.connectionManager.executeWithRetry(async () => {
                 try {
-                    // Initialize database with promise interface
-                    this.db = await open({
-                        filename: dbPath,
-                        driver: sqlite3.default.Database,
-                        mode: sqlite3.default.OPEN_READWRITE | sqlite3.default.OPEN_CREATE
+                    this.logger.info('Opening database at:', { 
+                        dbPath,
+                        mode: sqlite3.default.OPEN_READWRITE | sqlite3.default.OPEN_CREATE,
+                        exists: await (await import('fs/promises')).access(dbPath).then(() => true).catch(() => false)
                     });
+                    
+                    // Initialize database with promise interface
+                    try {
+                        // First try to open in read-write mode
+                        try {
+                            this.db = await open({
+                                filename: dbPath,
+                                driver: sqlite3.default.Database,
+                                mode: sqlite3.default.OPEN_READWRITE
+                            });
+                        } catch (err) {
+                            // If that fails, try to create a new database
+                            this.logger.info('Database does not exist, creating new one');
+                            this.db = await open({
+                                filename: dbPath,
+                                driver: sqlite3.default.Database,
+                                mode: sqlite3.default.OPEN_READWRITE | sqlite3.default.OPEN_CREATE
+                            });
+                        }
+                    } catch (err) {
+                        this.logger.error('Failed to open database with error:', {
+                            error: err,
+                            dbPath,
+                            mode: sqlite3.default.OPEN_READWRITE | sqlite3.default.OPEN_CREATE
+                        });
+                        throw err;
+                    }
+
+                    // Configure database with proper journal mode
+                    await this.db.exec(`
+                        PRAGMA journal_mode = DELETE;
+                        PRAGMA synchronous = NORMAL;
+                        PRAGMA locking_mode = EXCLUSIVE;
+                        PRAGMA journal_mode = WAL;
+                        PRAGMA wal_autocheckpoint = 1000;
+                    `);
+                    
+                    // Log database file info
+                    const fs = await import('fs/promises');
+                    try {
+                        const stats = await fs.stat(dbPath);
+                        this.logger.info('Database file created:', { 
+                            size: stats.size,
+                            created: stats.birthtime,
+                            modified: stats.mtime
+                        });
+                    } catch (err) {
+                        this.logger.error('Failed to get database file info:', { error: err });
+                    }
+                    
                     this.logger.debug('Database opened successfully');
                 } catch (err) {
                     this.logger.error('Failed to open database', {
@@ -224,29 +287,88 @@ export class SqliteStorage implements TaskStorage {
     }
 
     async updateTask(path: string, updates: UpdateTaskInput): Promise<Task> {
-        const existingTask = await this.getTask(path);
-        if (!existingTask) {
-            throw createError(
-                ErrorCodes.TASK_NOT_FOUND,
-                'Task not found',
-                'updateTask',
-                path
-            );
+        return this.inTransaction(async () => {
+            const existingTask = await this.getTask(path);
+            if (!existingTask) {
+                throw createError(
+                    ErrorCodes.TASK_NOT_FOUND,
+                    'Task not found',
+                    'updateTask',
+                    path
+                );
+            }
+
+            const updatedTask: Task = {
+                ...existingTask,
+                ...updates,
+                metadata: {
+                    ...existingTask.metadata,
+                    ...updates.metadata,
+                    updated: Date.now(),
+                    version: existingTask.metadata.version + 1
+                }
+            };
+
+            // Save the updated task
+            await this.saveTask(updatedTask);
+
+            // If status changed, propagate status up the hierarchy
+            if (updates.status && updates.status !== existingTask.status) {
+                await this.propagateStatusToParents(updatedTask);
+            }
+
+            return updatedTask;
+        });
+    }
+
+    /**
+     * Propagates task status changes up the hierarchy
+     */
+    private async propagateStatusToParents(task: Task): Promise<void> {
+        if (!task.parentPath) return;
+
+        const parent = await this.getTask(task.parentPath);
+        if (!parent) return;
+
+        // Get all subtasks of the parent
+        const subtasks = await this.getSubtasks(parent.path);
+        
+        // Calculate new parent status based on subtask statuses
+        let newStatus = parent.status;
+        const allCompleted = subtasks.every(t => t.status === TaskStatus.COMPLETED);
+        const anyFailed = subtasks.some(t => t.status === TaskStatus.FAILED);
+        const anyBlocked = subtasks.some(t => t.status === TaskStatus.BLOCKED);
+        const anyInProgress = subtasks.some(t => t.status === TaskStatus.IN_PROGRESS);
+
+        if (allCompleted) {
+            newStatus = TaskStatus.COMPLETED;
+        } else if (anyFailed) {
+            newStatus = TaskStatus.FAILED;
+        } else if (anyBlocked) {
+            newStatus = TaskStatus.BLOCKED;
+        } else if (anyInProgress) {
+            newStatus = TaskStatus.IN_PROGRESS;
+        } else {
+            newStatus = TaskStatus.PENDING;
         }
 
-        const updatedTask: Task = {
-            ...existingTask,
-            ...updates,
-            metadata: {
-                ...existingTask.metadata,
-                ...updates.metadata,
-                updated: Date.now(),
-                version: existingTask.metadata.version + 1
-            }
-        };
+        // Update parent status if changed
+        if (newStatus !== parent.status) {
+            const updatedParent: Task = {
+                ...parent,
+                status: newStatus,
+                metadata: {
+                    ...parent.metadata,
+                    updated: Date.now(),
+                    version: parent.metadata.version + 1
+                }
+            };
 
-        await this.saveTask(updatedTask);
-        return updatedTask;
+            await this.saveTask(updatedParent);
+            
+            // Recursively propagate to grandparent
+            await this.propagateStatusToParents(updatedParent);
+        }
     }
 
     async hasChildren(path: string): Promise<boolean> {
@@ -335,12 +457,16 @@ export class SqliteStorage implements TaskStorage {
     async saveTasks(tasks: Task[]): Promise<void> {
         await this.inTransaction(async () => {
             return this.withDb(async (db) => {
-
                 // First pass: collect all parent paths to load existing parents
                 const parentPaths = new Set<string>();
                 for (const task of tasks) {
                     if (task.parentPath) {
                         parentPaths.add(task.parentPath);
+                        // Also add grandparents for status propagation
+                        const parent = await this.getTask(task.parentPath);
+                        if (parent?.parentPath) {
+                            parentPaths.add(parent.parentPath);
+                        }
                     }
                 }
 
@@ -358,7 +484,8 @@ export class SqliteStorage implements TaskStorage {
                     }
                 }
 
-                // Second pass: update parent-child relationships
+                // Second pass: update parent-child relationships and status
+                const tasksToUpdate = new Set(tasks);
                 for (const task of tasks) {
                     if (task.parentPath) {
                         let parent = existingParents.get(task.parentPath);
@@ -367,14 +494,43 @@ export class SqliteStorage implements TaskStorage {
                             if (!parent.subtasks.includes(task.path)) {
                                 parent.subtasks = [...parent.subtasks, task.path];
                                 existingParents.set(parent.path, parent);
-                                tasks.push(parent); // Add parent to tasks to be saved
+                                tasksToUpdate.add(parent);
+                            }
+
+                            // Get all siblings for status calculation
+                            const siblings = await this.getSubtasks(parent.path);
+                            const allSubtasks = [...siblings, task];
+                            
+                            // Calculate new parent status
+                            const allCompleted = allSubtasks.every(t => t.status === TaskStatus.COMPLETED);
+                            const anyFailed = allSubtasks.some(t => t.status === TaskStatus.FAILED);
+                            const anyBlocked = allSubtasks.some(t => t.status === TaskStatus.BLOCKED);
+                            const anyInProgress = allSubtasks.some(t => t.status === TaskStatus.IN_PROGRESS);
+
+                            let newStatus = parent.status;
+                            if (allCompleted) {
+                                newStatus = TaskStatus.COMPLETED;
+                            } else if (anyFailed) {
+                                newStatus = TaskStatus.FAILED;
+                            } else if (anyBlocked) {
+                                newStatus = TaskStatus.BLOCKED;
+                            } else if (anyInProgress) {
+                                newStatus = TaskStatus.IN_PROGRESS;
+                            }
+
+                            // Update parent status if changed
+                            if (newStatus !== parent.status) {
+                                parent.status = newStatus;
+                                parent.metadata.updated = Date.now();
+                                parent.metadata.version++;
+                                tasksToUpdate.add(parent);
                             }
                         }
                     }
                 }
 
-                // Save all tasks with updated relationships
-                for (const task of tasks) {
+                // Save all tasks with updated relationships and status
+                for (const task of tasksToUpdate) {
                     this.logger.info('Saving task:', { task });
                     await db.run(
                         `INSERT OR REPLACE INTO tasks (
@@ -512,23 +668,42 @@ export class SqliteStorage implements TaskStorage {
             try {
                 // Convert glob pattern to SQL pattern
                 const sqlPattern = globToSqlPattern(pattern);
+                const isRecursive = pattern.includes('**');
 
                 this.logger.debug('Converting glob pattern to SQL', {
                     original: pattern,
-                    sql: sqlPattern
+                    sql: sqlPattern,
+                    isRecursive
                 });
 
-                // Use both GLOB and LIKE for better pattern matching
-                const rows = await db.all<Record<string, unknown>[]>(
-                    `SELECT * FROM tasks WHERE 
-                     path GLOB ? OR 
-                     path LIKE ? OR
-                     path LIKE ?`,
-                    sqlPattern,
-                    sqlPattern,
-                    // Add recursive matching for **
-                    pattern.includes('**') ? `${sqlPattern}/%` : sqlPattern
-                );
+                // Build SQL query based on pattern type
+                let query = 'SELECT * FROM tasks WHERE ';
+                const params: string[] = [];
+
+                if (isRecursive) {
+                    // For recursive patterns, match root path and all children
+                    const rootPath = pattern.split('/**')[0]; // Get the path before /**
+                    const projectRoot = rootPath.split('/')[0]; // Get project root (milestone)
+                    
+                    query += `(
+                        path = ? OR  -- Match project root (milestone)
+                        path = ? OR  -- Match exact path
+                        path GLOB ? OR  -- Match pattern with GLOB
+                        path LIKE ? || '/%'  -- Match children with LIKE
+                    )`;
+                    params.push(
+                        projectRoot,  // For project root (milestone)
+                        rootPath,  // For exact path
+                        rootPath + '*',  // For GLOB pattern
+                        rootPath  // For child paths
+                    );
+                } else {
+                    // For non-recursive patterns, use exact matching
+                    query += 'path GLOB ?';
+                    params.push(sqlPattern);
+                }
+
+                const rows = await db.all<Record<string, unknown>[]>(query, ...params);
 
                 return rows.map(row => this.rowToTask(row));
             } catch (error) {
@@ -842,22 +1017,21 @@ export class SqliteStorage implements TaskStorage {
     async clearAllTasks(): Promise<void> {
         return this.withDb(async (db) => {
             try {
-                // Drop existing tables
-                await db.run('DROP TABLE IF EXISTS tasks');
-                
-                // Clear cache and indexes
-                await this.clearCache();
-                
-                // Recreate tables
-                await this.setupDatabase();
-                
-                // Vacuum database outside of transaction
-                await db.run('VACUUM');
-                
-                // Analyze the new empty tables
+                // First drop and recreate tables in a transaction
+                await this.inTransaction(async () => {
+                    await db.run('DROP TABLE IF EXISTS tasks');
+                    await this.clearCache();
+                    await this.setupDatabase();
+                });
+
+                // Ensure we're not in a transaction before running maintenance
+                if (this.transactionDepth > 0) {
+                    await this.commitTransaction();
+                }
+
+                // Run maintenance operations outside any transaction
                 await db.run('ANALYZE');
-                
-                // Checkpoint WAL
+                await db.run('VACUUM');
                 await db.run('PRAGMA wal_checkpoint(TRUNCATE)');
                 
                 this.logger.info('Database reset: tables dropped, recreated, and optimized');

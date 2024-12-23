@@ -18,6 +18,8 @@ import {
     repairRelationshipsSchema
 } from './schemas.js';
 import { DependencyAwareBatchProcessor } from '../task/core/batch/dependency-aware-batch-processor.js';
+import { BatchData } from '../task/core/batch/common/batch-utils.js';
+import { TaskStorage } from '../types/storage.js';
 
 interface BulkOperation {
     type: 'create' | 'update' | 'delete';
@@ -49,6 +51,7 @@ export class ToolHandler {
     private readonly logger: Logger;
     private readonly tools: Map<string, Tool> = new Map();
     private readonly toolHandlers: Map<string, (args: Record<string, unknown>) => Promise<ToolResponse>> = new Map();
+    private isShuttingDown: boolean = false;
 
     constructor(private readonly taskManager: TaskManager) {
         this.logger = Logger.getInstance().child({ component: 'ToolHandler' });
@@ -305,10 +308,22 @@ export class ToolHandler {
                     
                     // Process operations sequentially with dependency ordering
                     const result = await batchProcessor.processInBatches(
-                        operationsWithDeps.map(op => ({ id: op.path, data: op })),
+                        operationsWithDeps.map(op => ({
+                            id: op.path,
+                            data: op,
+                            task: {
+                                path: op.path,
+                                type: 'TASK',
+                                name: op.path,
+                                status: 'PENDING',
+                                metadata: {}
+                            },
+                            dependencies: op.dependencies || []
+                        })),
                         1,
-                        async (operation) => {
+                        async (operation: BatchData): Promise<unknown> => {
                             const op = operation.data as BulkOperation;
+                            let result: unknown;
                         try {
                             switch (op.type) {
                                 case 'create': {
@@ -334,7 +349,7 @@ export class ToolHandler {
                                     // Validate hierarchy rules
                                     await this.validateTaskHierarchy(taskData, 'create');
 
-                                    await this.taskManager.createTask(taskData);
+                                    result = await this.taskManager.createTask(taskData);
                                     break;
                                 }
                                 case 'update': {
@@ -353,11 +368,11 @@ export class ToolHandler {
                                         await this.validateTaskHierarchy({ ...updateData, path: op.path }, 'update');
                                     }
 
-                                    await this.taskManager.updateTask(op.path, updateData);
+                                    result = await this.taskManager.updateTask(op.path, updateData);
                                     break;
                                 }
                                 case 'delete':
-                                    await this.taskManager.deleteTask(op.path);
+                                    result = await this.taskManager.deleteTask(op.path);
                                     break;
                                 default:
                                     throw createError(
@@ -365,6 +380,7 @@ export class ToolHandler {
                                         `Invalid operation type: ${op.type}`
                                     );
                             }
+                            return result;
                         } catch (error) {
                             this.logger.error('Operation failed', {
                                 operation: op,
@@ -506,6 +522,38 @@ export class ToolHandler {
 
     async getStorageMetrics(): Promise<any> {
         return await this.taskManager.storage.getMetrics();
+    }
+
+    async clearCaches(): Promise<void> {
+        const storage = this.taskManager.storage as TaskStorage;
+        if (storage?.clearCache) {
+            await storage.clearCache();
+        }
+    }
+
+    async cleanup(): Promise<void> {
+        if (this.isShuttingDown) {
+            return;
+        }
+
+        this.isShuttingDown = true;
+        this.logger.info('Starting tool handler cleanup...');
+
+        try {
+            // Clear caches first
+            await this.clearCaches();
+
+            // Checkpoint database to ensure WAL is flushed
+            const storage = this.taskManager.storage as TaskStorage;
+            if (storage) {
+                await storage.checkpoint();
+            }
+
+            this.logger.info('Tool handler cleanup completed');
+        } catch (error) {
+            this.logger.error('Error during tool handler cleanup:', { error });
+            throw error;
+        }
     }
 
     private formatResponse(result: unknown): ToolResponse {

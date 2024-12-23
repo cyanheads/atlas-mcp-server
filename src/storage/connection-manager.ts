@@ -16,9 +16,9 @@ export class ConnectionManager {
         busyTimeout?: number;
     } = {}) {
         this.logger = Logger.getInstance().child({ component: 'ConnectionManager' });
-        this.maxRetries = options.maxRetries || 3;
-        this.retryDelay = options.retryDelay || 1000;
-        this.busyTimeout = options.busyTimeout || 5000;
+        this.maxRetries = options.maxRetries || 5;
+        this.retryDelay = options.retryDelay || 2000;
+        this.busyTimeout = options.busyTimeout || 20000; // Increase timeout for busy state
     }
 
     /**
@@ -33,17 +33,40 @@ export class ConnectionManager {
 
         while (retryCount < this.maxRetries) {
             try {
-                return await operation();
+                // Handle busy state with timeout
+                return await new Promise<T>((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Operation timed out'));
+                    }, this.busyTimeout);
+
+                    operation()
+                        .then((result) => {
+                            clearTimeout(timeout);
+                            resolve(result);
+                        })
+                        .catch((error) => {
+                            clearTimeout(timeout);
+                            reject(error);
+                        });
+                });
             } catch (error) {
                 lastError = error instanceof Error ? error : new Error(String(error));
                 retryCount++;
 
+                // Check if error is due to database being locked
+                const isLocked = lastError.message.includes('SQLITE_BUSY') || 
+                               lastError.message.includes('database is locked');
+
                 if (retryCount < this.maxRetries) {
                     this.logger.warn(`Operation failed, retrying (${retryCount}/${this.maxRetries})`, {
                         error: lastError,
-                        context
+                        context,
+                        isLocked
                     });
-                    await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+
+                    // Use longer delay for locked database
+                    const delay = isLocked ? this.retryDelay * 2 : this.retryDelay;
+                    await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
         }

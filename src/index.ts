@@ -17,8 +17,14 @@ export class AtlasServerBootstrap {
     private toolHandler!: ToolHandler;
     private server!: AtlasServer;
     private readonly storageConfig: StorageConfig;
+    private isShuttingDown: boolean = false;
 
     constructor() {
+        // Set up cleanup handlers
+        process.on('SIGINT', () => this.cleanup());
+        process.on('SIGTERM', () => this.cleanup());
+        process.on('exit', () => this.cleanup());
+
         // Initialize logger
         this.logger = Logger.getInstance().child({ component: 'AtlasServerBootstrap' });
 
@@ -91,6 +97,31 @@ export class AtlasServerBootstrap {
         } catch (error) {
             this.logger.fatal('Failed to initialize server components', { error });
             throw error;
+        }
+    }
+
+    private async cleanup(): Promise<void> {
+        if (this.isShuttingDown) {
+            return;
+        }
+        
+        this.isShuttingDown = true;
+        this.logger.info('Starting cleanup...');
+        
+        try {
+            // Close server first to stop accepting new requests
+            if (this.server) {
+                await this.server.shutdown();
+            }
+
+            // Clean up storage
+            if (this.storage) {
+                await this.storage.close();
+            }
+
+            this.logger.info('Cleanup completed successfully');
+        } catch (error) {
+            this.logger.error('Error during cleanup:', { error });
         }
     }
 
