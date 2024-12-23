@@ -37,7 +37,7 @@ export async function createDefaultStorage(): Promise<TaskStorage> {
 
     const config: StorageConfig = {
         baseDir: baseDir.endsWith('/ATLAS') ? baseDir.slice(0, -6) : baseDir,
-        name: process.env.ATLAS_STORAGE_NAME || 'atlas-tasks',
+        name: 'atlas-tasks',
         connection: {
             maxRetries: Number(process.env.ATLAS_MAX_RETRIES) || 3,
             retryDelay: Number(process.env.ATLAS_RETRY_DELAY) || 1000,

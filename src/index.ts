@@ -40,15 +40,12 @@ export class AtlasServerBootstrap {
         if (!process.env.ATLAS_STORAGE_DIR) {
             throw new Error('ATLAS_STORAGE_DIR environment variable is required');
         }
-        if (!process.env.ATLAS_STORAGE_NAME) {
-            throw new Error('ATLAS_STORAGE_NAME environment variable is required');
-        }
 
         // Set up storage configuration
         const storageDir = process.env.ATLAS_STORAGE_DIR;
         this.storageConfig = {
             baseDir: storageDir,
-            name: process.env.ATLAS_STORAGE_NAME,
+            name: 'atlas-tasks',
             connection: {
                 maxRetries: Number(process.env.ATLAS_MAX_RETRIES) || 3,
                 retryDelay: Number(process.env.ATLAS_RETRY_DELAY) || 1000,
