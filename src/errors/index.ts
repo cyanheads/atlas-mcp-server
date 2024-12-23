@@ -101,6 +101,57 @@ export function createError(
 /**
  * Checks if an error is a known error type
  */
+/**
+ * Base error class for all application errors
+ */
+export class BaseError extends Error {
+    constructor(
+        public readonly code: ErrorCode,
+        message: string,
+        public readonly details?: unknown,
+        public readonly suggestion?: string
+    ) {
+        super(message);
+        this.name = this.constructor.name;
+    }
+}
+
+/**
+ * Task-related errors
+ */
+export class TaskError extends BaseError {
+    constructor(code: ErrorCode, message: string, details?: unknown, suggestion?: string) {
+        super(code, message, details, suggestion);
+    }
+}
+
+/**
+ * Configuration-related errors
+ */
+export class ConfigError extends BaseError {
+    constructor(code: ErrorCode, message: string, details?: unknown, suggestion?: string) {
+        super(code, message, details, suggestion);
+    }
+}
+
+/**
+ * Storage-related errors
+ */
+export class StorageError extends BaseError {
+    constructor(code: ErrorCode, message: string, details?: unknown, suggestion?: string) {
+        super(code, message, details, suggestion);
+    }
+}
+
+/**
+ * Validation-related errors
+ */
+export class ValidationError extends BaseError {
+    constructor(code: ErrorCode, message: string, details?: unknown, suggestion?: string) {
+        super(code, message, details, suggestion);
+    }
+}
+
 export function isKnownError(error: unknown): error is Error & { code: ErrorCode } {
     return error instanceof Error && 'code' in error;
 }
