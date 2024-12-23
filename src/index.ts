@@ -77,7 +77,7 @@ export class AtlasServerBootstrap {
             // Configure storage
             const storageConfig = {
                 ...this.storageConfig,
-                baseDir: `${this.storageConfig.baseDir}/ATLAS`,
+                baseDir: storageDir,
                 name: 'atlas-tasks',
                 connection: {
                     ...this.storageConfig.connection,
