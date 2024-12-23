@@ -3,6 +3,7 @@
  * Path-based task management system
  */
 import { promises as fs } from 'fs';
+import { platform } from 'os';
 import { TaskManager } from './task-manager.js';
 import { Logger } from './logging/index.js';
 import { StorageConfig, TaskStorage } from './types/storage.js';
@@ -62,12 +63,43 @@ export class AtlasServerBootstrap {
         };
     }
 
+    /**
+     * Creates storage directory with appropriate permissions for the current platform
+     */
+    private async ensureStorageDirectory(): Promise<void> {
+        try {
+            // Create directory if it doesn't exist
+            await fs.mkdir(this.storageConfig.baseDir, { recursive: true });
+
+            // Set permissions based on platform
+            if (platform() !== 'win32') {
+                try {
+                    await fs.chmod(this.storageConfig.baseDir, 0o755);
+                } catch (error: any) {
+                    this.logger.warn('Failed to set directory permissions, continuing anyway', {
+                        error: error?.message || String(error),
+                        dir: this.storageConfig.baseDir
+                    });
+                }
+            }
+
+            // Verify directory is writable
+            try {
+                const testFile = `${this.storageConfig.baseDir}/.write-test-${Date.now()}`;
+                await fs.writeFile(testFile, '');
+                await fs.unlink(testFile);
+            } catch (error: any) {
+                throw new Error(`Storage directory is not writable: ${this.storageConfig.baseDir} - ${error?.message || String(error)}`);
+            }
+        } catch (error: any) {
+            throw new Error(`Failed to initialize storage directory: ${error?.message || String(error)}`);
+        }
+    }
+
     private async initialize(): Promise<void> {
         try {
-            // Initialize storage with proper configuration
-            // Ensure storage directory exists with proper permissions
-            await fs.mkdir(this.storageConfig.baseDir, { recursive: true, mode: 0o755 });
-            await fs.chmod(this.storageConfig.baseDir, 0o755);  // Ensure directory is readable/writable
+            // Initialize storage directory with platform-specific handling
+            await this.ensureStorageDirectory();
             
             // Configure storage
             const storageConfig = {

@@ -1,6 +1,10 @@
 /**
  * Task type definitions
  */
+import { sep } from 'path';
+
+// Helper function to normalize paths for consistent handling
+const normalizePath = (path: string): string => path.split(sep).join('/');
 
 export enum TaskType {
     TASK = 'TASK',
@@ -106,8 +110,11 @@ export function validateTaskPath(path: string): { valid: boolean; error?: string
         return { valid: false, error: 'Path cannot be empty' };
     }
 
+    // Normalize path for validation
+    const normalizedPath = normalizePath(path);
+
     // Path must contain only allowed characters
-    if (!path.match(/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/)) {
+    if (!normalizedPath.match(/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/)) {
         return { 
             valid: false, 
             error: 'Path can only contain alphanumeric characters, underscores, dots, and hyphens' 
@@ -115,7 +122,7 @@ export function validateTaskPath(path: string): { valid: boolean; error?: string
     }
     
     // Check path depth
-    if (path.split('/').length > CONSTRAINTS.MAX_PATH_DEPTH) {
+    if (normalizedPath.split('/').length > CONSTRAINTS.MAX_PATH_DEPTH) {
         return { 
             valid: false, 
             error: `Path depth cannot exceed ${CONSTRAINTS.MAX_PATH_DEPTH} levels` 
@@ -232,6 +239,36 @@ export function validateTask(task: Task): { valid: boolean; errors: string[] } {
 /**
  * Validates parent-child task type relationships
  */
+export function isValidTaskHierarchy(parentType: TaskType, childType: TaskType): { valid: boolean; reason?: string } {
+    switch (parentType) {
+        case TaskType.MILESTONE:
+            // Milestones can contain tasks and groups
+            return {
+                valid: childType === TaskType.TASK || childType === TaskType.GROUP,
+                reason: childType !== TaskType.TASK && childType !== TaskType.GROUP ?
+                    `MILESTONE can only contain TASK or GROUP types, not ${childType}` : undefined
+            };
+        case TaskType.GROUP:
+            // Groups can contain tasks
+            return {
+                valid: childType === TaskType.TASK,
+                reason: childType !== TaskType.TASK ?
+                    `GROUP can only contain TASK type, not ${childType}` : undefined
+            };
+        case TaskType.TASK:
+            // Tasks cannot contain other tasks
+            return {
+                valid: false,
+                reason: `TASK type cannot contain any subtasks (attempted to add ${childType})`
+            };
+        default:
+            return {
+                valid: false,
+                reason: `Unknown task type: ${parentType}`
+            };
+    }
+}
+
 /**
  * Validates task dependency status
  */
@@ -282,41 +319,12 @@ export function validateDependencyStatus(
     return { valid: true };
 }
 
-export function isValidTaskHierarchy(parentType: TaskType, childType: TaskType): { valid: boolean; reason?: string } {
-    switch (parentType) {
-        case TaskType.MILESTONE:
-            // Milestones can contain tasks and groups
-            return {
-                valid: childType === TaskType.TASK || childType === TaskType.GROUP,
-                reason: childType !== TaskType.TASK && childType !== TaskType.GROUP ?
-                    `MILESTONE can only contain TASK or GROUP types, not ${childType}` : undefined
-            };
-        case TaskType.GROUP:
-            // Groups can contain tasks
-            return {
-                valid: childType === TaskType.TASK,
-                reason: childType !== TaskType.TASK ?
-                    `GROUP can only contain TASK type, not ${childType}` : undefined
-            };
-        case TaskType.TASK:
-            // Tasks cannot contain other tasks
-            return {
-                valid: false,
-                reason: `TASK type cannot contain any subtasks (attempted to add ${childType})`
-            };
-        default:
-            return {
-                valid: false,
-                reason: `Unknown task type: ${parentType}`
-            };
-    }
-}
-
 /**
  * Gets the task name from a path
  */
 export function getTaskName(path: string): string {
-    const segments = path.split('/');
+    const normalizedPath = normalizePath(path);
+    const segments = normalizedPath.split('/');
     return segments[segments.length - 1];
 }
 
@@ -324,6 +332,7 @@ export function getTaskName(path: string): string {
  * Gets the parent path from a task path
  */
 export function getParentPath(path: string): string | undefined {
-    const segments = path.split('/');
+    const normalizedPath = normalizePath(path);
+    const segments = normalizedPath.split('/');
     return segments.length > 1 ? segments.slice(0, -1).join('/') : undefined;
 }
