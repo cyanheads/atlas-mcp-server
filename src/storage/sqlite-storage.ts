@@ -217,7 +217,7 @@ export class SqliteStorage implements TaskStorage {
                 config: {
                     baseDir: this.config.baseDir,
                     name: this.config.name,
-                    dbPath: `${this.config.baseDir}/${this.config.name}.db`
+                    dbPath: normalize(join(this.config.baseDir, `${this.config.name}.db`))
                 }
             };
             
