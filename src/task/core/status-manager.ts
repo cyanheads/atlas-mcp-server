@@ -2,8 +2,6 @@
  * Manages task status transitions and validation
  */
 import { Task, TaskStatus } from '../../types/task.js';
-import { ErrorCodes, createError } from '../../errors/index.js';
-import { Logger } from '../../logging/index.js';
 
 interface StatusTransition {
     from: TaskStatus;
@@ -12,7 +10,6 @@ interface StatusTransition {
 }
 
 export class TaskStatusManager {
-    private readonly logger: Logger;
     
     // Define valid status transitions
     private readonly statusTransitions: StatusTransition[] = [
@@ -45,9 +42,7 @@ export class TaskStatusManager {
         }
     ];
 
-    constructor() {
-        this.logger = Logger.getInstance().child({ component: 'TaskStatusManager' });
-    }
+    constructor() {}
 
     /**
      * Validates a status transition with detailed error messages

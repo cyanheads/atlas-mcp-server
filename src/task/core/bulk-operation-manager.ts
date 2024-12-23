@@ -1,7 +1,7 @@
 /**
  * Manages bulk operations with improved error handling and batching
  */
-import { Task, TaskStatus, CreateTaskInput, UpdateTaskInput } from '../../types/task.js';
+import { Task, CreateTaskInput, UpdateTaskInput } from '../../types/task.js';
 import { Logger } from '../../logging/index.js';
 import { ErrorCodes, createError } from '../../errors/index.js';
 import { TaskStatusManager } from './status-manager.js';
@@ -28,7 +28,6 @@ export class BulkOperationManager {
     private readonly storage: TaskStorage;
     private readonly statusManager: TaskStatusManager;
     private readonly BATCH_SIZE = 50;
-    private readonly MAX_CONCURRENT_OPERATIONS = 5;
     private stats: BatchStats;
 
     constructor(storage: TaskStorage) {
