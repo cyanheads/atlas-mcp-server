@@ -12,8 +12,7 @@ import { LogLevel, LogLevels } from '../types/logging.js';
 export const EnvVars = {
     NODE_ENV: 'NODE_ENV',
     LOG_LEVEL: 'LOG_LEVEL',
-    ATLAS_STORAGE_DIR: 'ATLAS_STORAGE_DIR',
-    ATLAS_STORAGE_NAME: 'ATLAS_STORAGE_NAME'
+    ATLAS_STORAGE_DIR: 'ATLAS_STORAGE_DIR'
 } as const;
 
 /**
@@ -281,7 +280,6 @@ export class ConfigManager {
         const env = process.env[EnvVars.NODE_ENV];
         const logLevel = process.env[EnvVars.LOG_LEVEL];
         const storageDir = customConfig.storage?.baseDir || process.env[EnvVars.ATLAS_STORAGE_DIR];
-        const storageName = customConfig.storage?.name || process.env[EnvVars.ATLAS_STORAGE_NAME] || 'atlas-tasks';
 
         if (!storageDir) {
             throw new ConfigError(
@@ -293,7 +291,7 @@ export class ConfigManager {
         const config: any = {
             storage: {
                 baseDir: storageDir,
-                name: storageName,
+                name: 'atlas-tasks',
                 connection: {
                     maxRetries: 3,
                     retryDelay: 1000,
