@@ -216,13 +216,13 @@ export class TaskStore {
                         );
                     }
 
-                // Always update parent's subtasks array
-                parent.subtasks = Array.from(new Set([...parent.subtasks, task.path]));
-                parentUpdates.set(parent.path, parent);
-                
-                // Ensure parent-child relationship is indexed
-                await this.indexManager.unindexTask(parent);
-                await this.indexManager.indexTask(parent);
+                    // Always update parent's subtasks array
+                    parent.subtasks = Array.from(new Set([...parent.subtasks, task.path]));
+                    parentUpdates.set(parent.path, parent);
+                    
+                    // Ensure parent-child relationship is indexed
+                    await this.indexManager.unindexTask(parent);
+                    await this.indexManager.indexTask(parent);
                 }
             }
 

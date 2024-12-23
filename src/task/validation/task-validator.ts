@@ -243,7 +243,8 @@ export class TaskValidator {
 
   private validatePathFormat(path: string): void {
     const MAX_DEPTH = 8;
-    const PATH_PATTERN = /^[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*$/;
+    // Allow both forward and backward slashes for cross-platform compatibility
+    const PATH_PATTERN = /^[a-z0-9][a-z0-9_.-]*(?:[\/\\][a-z0-9][a-z0-9_.-]*)*$/;
 
     if (!PATH_PATTERN.test(path)) {
       throw createError(
@@ -256,7 +257,7 @@ export class TaskValidator {
         'Task path must:\n' +
         '1. Start with alphanumeric character\n' +
         '2. Contain only lowercase alphanumeric characters, underscores, dots, and hyphens\n' +
-        '3. Use forward slashes for hierarchy\n' +
+        '3. Use forward or backward slashes for hierarchy\n' +
         '4. Not start or end with a slash'
       );
     }
