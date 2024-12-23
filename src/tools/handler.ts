@@ -47,14 +47,18 @@ export interface ToolResponse {
     }>;
 }
 
+import { TaskValidator } from '../task/validation/task-validator.js';
+
 export class ToolHandler {
     private readonly logger: Logger;
     private readonly tools: Map<string, Tool> = new Map();
     private readonly toolHandlers: Map<string, (args: Record<string, unknown>) => Promise<ToolResponse>> = new Map();
     private isShuttingDown: boolean = false;
+    private readonly taskValidator: TaskValidator;
 
     constructor(private readonly taskManager: TaskManager) {
         this.logger = Logger.getInstance().child({ component: 'ToolHandler' });
+        this.taskValidator = new TaskValidator(taskManager.storage);
         this.registerDefaultTools();
     }
 
@@ -206,6 +210,20 @@ export class ToolHandler {
                     // Validate hierarchy rules if type is being updated
                     if (updates.type) {
                         await this.validateTaskHierarchy({ ...updates, path }, 'update');
+                    }
+
+                    // Validate status changes using TaskValidator
+                    if (updates.status) {
+                        const task = await this.taskManager.getTaskByPath(path);
+                        if (!task) {
+                            throw createError(
+                                ErrorCodes.TASK_NOT_FOUND,
+                                `Task not found: ${path}`
+                            );
+                        }
+                        await this.taskValidator.validateUpdate(path, {
+                            status: updates.status as TaskStatus
+                        });
                     }
                     
                     // Create update input with proper type casting
@@ -476,47 +494,132 @@ export class ToolHandler {
     }> {
         const { name, arguments: args = {} } = request.params;
 
+        // Enhanced tool validation
         const tool = this.tools.get(name);
         if (!tool) {
             throw createError(
-                ErrorCodes.INVALID_INPUT,
-                { tool: name },
-                'Unknown tool'
+                ErrorCodes.TOOL_NOT_FOUND,
+                { availableTools: Array.from(this.tools.keys()) },
+                `Tool '${name}' is not registered`,
+                `Available tools: ${Array.from(this.tools.keys()).join(', ')}`
             );
         }
 
         const handler = this.toolHandlers.get(name);
         if (!handler) {
             throw createError(
-                ErrorCodes.INVALID_INPUT,
+                ErrorCodes.TOOL_HANDLER_MISSING,
                 { tool: name },
-                'Tool handler not found'
+                `Handler for tool '${name}' is not implemented`,
+                'This indicates a system configuration issue. Contact the administrator.'
             );
         }
 
         try {
-            // Validate dependencies are at root level
-            if ((name === 'create_task' || name === 'update_task') && 
-                (args as any).metadata?.dependencies) {
+            // Validate required parameters
+            const missingParams = (tool.inputSchema.required || [])
+                .filter(param => !(param in args));
+            if (missingParams.length > 0) {
                 throw createError(
-                    ErrorCodes.INVALID_INPUT,
-                    'Dependencies must be specified at root level, not in metadata'
+                    ErrorCodes.TOOL_PARAMS_INVALID,
+                    {
+                        tool: name,
+                        missingParams,
+                        providedParams: Object.keys(args)
+                    },
+                    `Missing required parameters for tool '${name}'`,
+                    `Required parameters: ${missingParams.join(', ')}`
                 );
             }
 
-            this.logger.debug('Executing tool', { name, args });
+            // Validate dependencies location
+            if ((name === 'create_task' || name === 'update_task') && 
+                (args as any).metadata?.dependencies) {
+                throw createError(
+                    ErrorCodes.TOOL_PARAMS_INVALID,
+                    {
+                        tool: name,
+                        issue: 'dependencies_in_metadata'
+                    },
+                    'Invalid dependencies location',
+                    'Dependencies must be specified at root level, not in metadata. Move "dependencies" out of metadata object.'
+                );
+            }
+
+            // Check for database state before operations
+            if (['create_task', 'update_task', 'delete_task', 'bulk_task_operations'].includes(name)) {
+                if (this.isShuttingDown) {
+                    throw createError(
+                        ErrorCodes.TOOL_SHUTDOWN,
+                        {
+                            tool: name,
+                            state: 'shutting_down'
+                        },
+                        'Cannot perform task operations while server is shutting down',
+                        'Wait for system restart before retrying operations'
+                    );
+                }
+            }
+
+            // Validate tool state
+            if (!this.taskManager.storage) {
+                throw createError(
+                    ErrorCodes.TOOL_STATE_INVALID,
+                    {
+                        tool: name,
+                        issue: 'storage_not_initialized'
+                    },
+                    'Storage system not initialized',
+                    'Database connection must be established before performing operations'
+                );
+            }
+
+            this.logger.debug('Executing tool', { 
+                name, 
+                args,
+                schema: tool.inputSchema
+            });
+
             const result = await handler(args);
-            this.logger.debug('Tool execution completed', { name });
+
+            this.logger.debug('Tool execution completed', { 
+                name,
+                resultType: result?.content?.[0]?.type
+            });
+
             return {
-                _meta: {},
+                _meta: {
+                    tool: name,
+                    timestamp: Date.now()
+                },
                 ...result
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const errorDetails = error instanceof Error ? {
+                name: error.name,
+                code: (error as any).code,
+                stack: error.stack
+            } : {};
+
             this.logger.error('Tool execution failed', {
                 tool: name,
-                error
+                args,
+                error: errorMessage,
+                details: errorDetails
             });
-            throw error;
+
+            // Enhance error message with context
+            throw createError(
+                (error as any).code || ErrorCodes.INTERNAL_ERROR,
+                `Tool '${name}' execution failed: ${errorMessage}`,
+                JSON.stringify({
+                    tool: name,
+                    args,
+                    error: errorMessage,
+                    ...errorDetails
+                }, null, 2)
+            );
         }
     }
 

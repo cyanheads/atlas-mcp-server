@@ -67,12 +67,27 @@ export class AtlasServerBootstrap {
 
     private async initialize(): Promise<void> {
         try {
-            // Ensure storage directory exists
-            await fs.mkdir(this.storageConfig.baseDir, { recursive: true });
-
-            // Initialize storage
-            this.storage = await createStorage(this.storageConfig);
-            this.logger.info('Storage initialized', { dir: this.storageConfig.baseDir });
+            // Initialize storage with proper configuration
+            const storageDir = `${this.storageConfig.baseDir}/ATLAS`;
+            
+            // Ensure storage directory exists with proper permissions
+            await fs.mkdir(storageDir, { recursive: true, mode: 0o755 });
+            await fs.chmod(storageDir, 0o755);  // Ensure directory is readable/writable
+            
+            // Configure storage
+            const storageConfig = {
+                ...this.storageConfig,
+                baseDir: `${this.storageConfig.baseDir}/ATLAS`,
+                name: 'atlas-tasks',
+                connection: {
+                    ...this.storageConfig.connection,
+                    busyTimeout: 10000,
+                    maxRetries: 5,
+                    retryDelay: 1000
+                }
+            };
+            this.storage = await createStorage(storageConfig);
+            this.logger.info('Storage initialized', { dir: storageConfig.baseDir });
 
             // Initialize task manager with existing storage
             this.taskManager = new TaskManager(this.storage);

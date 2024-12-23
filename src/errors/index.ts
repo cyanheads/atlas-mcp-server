@@ -48,7 +48,15 @@ export const ErrorCodes = {
     NOT_IMPLEMENTED: 'OPERATION_5002',
     INTERNAL_ERROR: 'OPERATION_5003',
     CONCURRENT_MODIFICATION: 'OPERATION_5004',
-    TIMEOUT: 'OPERATION_5005'
+    TIMEOUT: 'OPERATION_5005',
+
+    // Tool errors (6000-6999)
+    TOOL_NOT_FOUND: 'TOOL_6001',
+    TOOL_HANDLER_MISSING: 'TOOL_6002',
+    TOOL_PARAMS_INVALID: 'TOOL_6003',
+    TOOL_EXECUTION_FAILED: 'TOOL_6004',
+    TOOL_STATE_INVALID: 'TOOL_6005',
+    TOOL_SHUTDOWN: 'TOOL_6006'
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
@@ -201,6 +209,35 @@ export const ErrorMessages: Record<ErrorCode, { message: string; suggestion: str
     [ErrorCodes.TIMEOUT]: {
         message: 'Operation timed out',
         suggestion: 'Check system load and retry operation'
+    },
+
+    // Tool errors
+    [ErrorCodes.TOOL_NOT_FOUND]: {
+        message: 'Tool not found',
+        suggestion: 'Verify the tool name and ensure it is registered in the system'
+    },
+    [ErrorCodes.TOOL_HANDLER_MISSING]: {
+        message: 'Tool handler not implemented',
+        suggestion: 'This is a system configuration issue. Contact the administrator.'
+    },
+    [ErrorCodes.TOOL_PARAMS_INVALID]: {
+        message: 'Invalid tool parameters',
+        suggestion: 'Check the tool documentation for required parameters and their formats'
+    },
+    [ErrorCodes.TOOL_EXECUTION_FAILED]: {
+        message: 'Tool execution failed',
+        suggestion: 'Review error details and verify all prerequisites are met'
+    },
+    [ErrorCodes.TOOL_STATE_INVALID]: {
+        message: 'Invalid tool state',
+        suggestion: 'The tool cannot perform this operation in its current state. Common issues:\n' +
+                   '1. Database is not initialized\n' +
+                   '2. Required resources are locked\n' +
+                   '3. System is in an invalid state'
+    },
+    [ErrorCodes.TOOL_SHUTDOWN]: {
+        message: 'Tool system is shutting down',
+        suggestion: 'Wait for system restart before retrying operations'
     }
 };
 

@@ -122,11 +122,12 @@ export class SqliteStorage implements TaskStorage {
 
                     // Configure database with proper journal mode
                     await this.db.exec(`
-                        PRAGMA journal_mode = DELETE;
-                        PRAGMA synchronous = NORMAL;
-                        PRAGMA locking_mode = EXCLUSIVE;
                         PRAGMA journal_mode = WAL;
+                        PRAGMA synchronous = NORMAL;
+                        PRAGMA locking_mode = NORMAL;
+                        PRAGMA busy_timeout = 5000;
                         PRAGMA wal_autocheckpoint = 1000;
+                        PRAGMA foreign_keys = ON;
                     `);
                     
                     // Log database file info
@@ -409,6 +410,8 @@ export class SqliteStorage implements TaskStorage {
 
     private async inTransaction<T>(operation: () => Promise<T>): Promise<T> {
         return this.withDb(async (db) => {
+            this.validateTransactionState();
+
             // If we're already in a transaction, just execute the operation
             if (this.transactionDepth > 0) {
                 this.transactionDepth++;
@@ -416,6 +419,7 @@ export class SqliteStorage implements TaskStorage {
                     return await operation();
                 } finally {
                     this.transactionDepth--;
+                    this.validateTransactionState();
                 }
             }
 
@@ -423,14 +427,14 @@ export class SqliteStorage implements TaskStorage {
             this.transactionDepth = 1;
             try {
                 await db.run('BEGIN IMMEDIATE');
-                this.logger.debug('Started new transaction');
+                this.logger.debug('Started new transaction', { depth: this.transactionDepth });
                 
                 const result = await operation();
                 
                 // Only commit if we haven't already committed
                 if (this.transactionDepth === 1) {
                     await db.run('COMMIT');
-                    this.logger.debug('Committed transaction');
+                    this.logger.debug('Committed transaction', { depth: this.transactionDepth });
                 }
                 
                 return result;
@@ -439,17 +443,19 @@ export class SqliteStorage implements TaskStorage {
                 if (this.transactionDepth === 1) {
                     try {
                         await db.run('ROLLBACK');
-                        this.logger.debug('Rolled back transaction');
+                        this.logger.debug('Rolled back transaction', { depth: this.transactionDepth });
                     } catch (rollbackError) {
                         this.logger.error('Failed to rollback transaction', {
                             error: rollbackError,
-                            originalError: error
+                            originalError: error,
+                            depth: this.transactionDepth
                         });
                     }
                 }
                 throw error;
             } finally {
                 this.transactionDepth = 0;
+                this.validateTransactionState();
             }
         });
     }
@@ -1012,39 +1018,139 @@ export class SqliteStorage implements TaskStorage {
     }
 
     /**
-     * Clears all tasks from the database and recreates tables
+     * Validates the current transaction state
      */
-    async clearAllTasks(): Promise<void> {
+    private validateTransactionState(): void {
+        if (this.transactionDepth < 0) {
+            throw createError(
+                ErrorCodes.STORAGE_ERROR,
+                'Invalid transaction state',
+                'Transaction depth is negative'
+            );
+        }
+    }
+
+    /**
+     * Checks the current database state
+     */
+    private async checkDatabaseState(): Promise<void> {
         return this.withDb(async (db) => {
             try {
-                // First drop and recreate tables in a transaction
-                await this.inTransaction(async () => {
-                    await db.run('DROP TABLE IF EXISTS tasks');
-                    await this.clearCache();
-                    await this.setupDatabase();
-                });
-
-                // Ensure we're not in a transaction before running maintenance
-                if (this.transactionDepth > 0) {
-                    await this.commitTransaction();
+                // Check if tasks table exists and is accessible
+                const tableExists = await db.get<{ count: number }>(
+                    "SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='tasks'"
+                );
+                
+                if (!tableExists || tableExists.count === 0) {
+                    this.logger.warn('Tasks table not found, will be created during operation');
                 }
 
-                // Run maintenance operations outside any transaction
-                await db.run('ANALYZE');
-                await db.run('VACUUM');
-                await db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+                // Check database integrity
+                const integrityCheck = await db.get<{ integrity_check: string }>(
+                    'PRAGMA integrity_check'
+                );
                 
-                this.logger.info('Database reset: tables dropped, recreated, and optimized');
+                if (integrityCheck?.integrity_check !== 'ok') {
+                    throw createError(
+                        ErrorCodes.STORAGE_ERROR,
+                        'Database integrity check failed',
+                        String(integrityCheck?.integrity_check)
+                    );
+                }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger.error('Failed to clear tasks', { error: errorMessage });
+                this.logger.error('Database state check failed', { error: errorMessage });
                 throw createError(
                     ErrorCodes.STORAGE_ERROR,
-                    'Failed to clear tasks',
+                    'Failed to verify database state',
                     errorMessage
                 );
             }
         });
+    }
+
+    /**
+     * Clears all tasks from the database and recreates tables
+     */
+    async clearAllTasks(): Promise<void> {
+        // First check database state
+        await this.checkDatabaseState();
+        
+        try {
+            this.logger.debug('Starting clearAllTasks operation');
+
+            // Step 1: Drop and recreate tables within transaction
+            await this.inTransaction(async () => {
+                await this.withDb(async (db) => {
+                    await db.run('DROP TABLE IF EXISTS tasks');
+                });
+                await this.clearCache();
+                await this.setupDatabase();
+            });
+
+            // Step 2: Ensure all transactions are completed
+            if (this.transactionDepth !== 0) {
+                throw createError(
+                    ErrorCodes.STORAGE_ERROR,
+                    'Invalid transaction state',
+                    `Transaction depth is ${this.transactionDepth} but should be 0`
+                );
+            }
+
+            // Step 3: Run maintenance operations outside any transaction
+            await this.withDb(async (db) => {
+                try {
+                    // First run ANALYZE as it's safer
+                    this.logger.debug('Running ANALYZE');
+                    await db.run('ANALYZE');
+
+                    // Then run VACUUM with error handling
+                    this.logger.debug('Running VACUUM');
+                    try {
+                        await db.run('VACUUM');
+                    } catch (vacuumError) {
+                        this.logger.warn('VACUUM failed, continuing with other operations', {
+                            error: vacuumError
+                        });
+                    }
+
+                    // Finally checkpoint WAL
+                    this.logger.debug('Running WAL checkpoint');
+                    await db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+                } catch (maintenanceError) {
+                    // Log but don't fail the operation for maintenance errors
+                    this.logger.error('Maintenance operations failed', {
+                        error: maintenanceError
+                    });
+                }
+            });
+            
+            this.logger.info('Database reset: tables dropped, recreated, and optimized');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error('Failed to clear tasks', {
+                error: errorMessage,
+                transactionDepth: this.transactionDepth
+            });
+
+            // Attempt to reset transaction state
+            if (this.transactionDepth > 0) {
+                try {
+                    await this.rollbackTransaction();
+                } catch (rollbackError) {
+                    this.logger.error('Failed to rollback transaction after error', {
+                        error: rollbackError,
+                        originalError: error
+                    });
+                }
+            }
+
+            throw createError(
+                ErrorCodes.STORAGE_ERROR,
+                'Failed to clear tasks',
+                `${errorMessage} (Transaction depth: ${this.transactionDepth})`
+            );
+        }
     }
 
     /**
@@ -1124,6 +1230,8 @@ export class SqliteStorage implements TaskStorage {
      * Begins a new transaction
      */
     async beginTransaction(): Promise<void> {
+        this.validateTransactionState();
+
         if (this.transactionDepth > 0) {
             this.transactionDepth++;
             this.logger.debug('Nested transaction started', { depth: this.transactionDepth });
@@ -1134,10 +1242,13 @@ export class SqliteStorage implements TaskStorage {
             try {
                 await db.run('BEGIN IMMEDIATE');
                 this.transactionDepth = 1;
-                this.logger.debug('Transaction started');
+                this.logger.debug('Transaction started', { depth: this.transactionDepth });
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger.error('Failed to begin transaction', { error: errorMessage });
+                this.logger.error('Failed to begin transaction', { 
+                    error: errorMessage,
+                    depth: this.transactionDepth
+                });
                 throw createError(
                     ErrorCodes.STORAGE_ERROR,
                     'Failed to begin transaction',
@@ -1151,6 +1262,8 @@ export class SqliteStorage implements TaskStorage {
      * Commits the current transaction
      */
     async commitTransaction(): Promise<void> {
+        this.validateTransactionState();
+
         if (this.transactionDepth > 1) {
             this.transactionDepth--;
             this.logger.debug('Nested transaction committed', { depth: this.transactionDepth });
@@ -1161,10 +1274,14 @@ export class SqliteStorage implements TaskStorage {
             try {
                 await db.run('COMMIT');
                 this.transactionDepth = 0;
-                this.logger.debug('Transaction committed');
+                this.logger.debug('Transaction committed', { depth: this.transactionDepth });
+                this.validateTransactionState();
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger.error('Failed to commit transaction', { error: errorMessage });
+                this.logger.error('Failed to commit transaction', { 
+                    error: errorMessage,
+                    depth: this.transactionDepth
+                });
                 throw createError(
                     ErrorCodes.STORAGE_ERROR,
                     'Failed to commit transaction',
@@ -1178,6 +1295,8 @@ export class SqliteStorage implements TaskStorage {
      * Rolls back the current transaction
      */
     async rollbackTransaction(): Promise<void> {
+        this.validateTransactionState();
+
         if (this.transactionDepth > 1) {
             this.transactionDepth--;
             this.logger.debug('Nested transaction rolled back', { depth: this.transactionDepth });
@@ -1188,10 +1307,14 @@ export class SqliteStorage implements TaskStorage {
             try {
                 await db.run('ROLLBACK');
                 this.transactionDepth = 0;
-                this.logger.debug('Transaction rolled back');
+                this.logger.debug('Transaction rolled back', { depth: this.transactionDepth });
+                this.validateTransactionState();
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger.error('Failed to rollback transaction', { error: errorMessage });
+                this.logger.error('Failed to rollback transaction', { 
+                    error: errorMessage,
+                    depth: this.transactionDepth
+                });
                 throw createError(
                     ErrorCodes.STORAGE_ERROR,
                     'Failed to rollback transaction',

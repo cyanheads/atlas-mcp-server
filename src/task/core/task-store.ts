@@ -146,9 +146,18 @@ export class TaskStore {
             const tasksToSave = new Map<string, Task>();
 
             for (const task of tasks) {
-                // Ensure task has required arrays
-                if (!task.subtasks) task.subtasks = [];
-                if (!task.dependencies) task.dependencies = [];
+                // Get existing task to preserve fields
+                const existingTask = await this.getTaskByPath(task.path);
+                if (existingTask) {
+                    // Merge updates with existing task
+                    Object.assign(existingTask, task);
+                    tasksToSave.set(task.path, existingTask);
+                } else {
+                    // Ensure new task has required arrays
+                    if (!task.subtasks) task.subtasks = [];
+                    if (!task.dependencies) task.dependencies = [];
+                    tasksToSave.set(task.path, task);
+                }
 
                 // Get and validate parent path
                 const parentPath = task.parentPath || getParentPath(task.path);
@@ -156,8 +165,6 @@ export class TaskStore {
                     task.parentPath = parentPath;
                     parentPaths.add(parentPath);
                 }
-
-                tasksToSave.set(task.path, task);
             }
 
             // Second pass: load and validate all parents
@@ -209,15 +216,13 @@ export class TaskStore {
                         );
                     }
 
-                    // Update and index parent's subtasks if needed
-                    if (!parent.subtasks.includes(task.path)) {
-                        parent.subtasks = [...parent.subtasks, task.path];
-                        parentUpdates.set(parent.path, parent);
-                        
-                        // Ensure parent-child relationship is indexed
-                        await this.indexManager.unindexTask(parent);
-                        await this.indexManager.indexTask(parent);
-                    }
+                // Always update parent's subtasks array
+                parent.subtasks = Array.from(new Set([...parent.subtasks, task.path]));
+                parentUpdates.set(parent.path, parent);
+                
+                // Ensure parent-child relationship is indexed
+                await this.indexManager.unindexTask(parent);
+                await this.indexManager.indexTask(parent);
                 }
             }
 

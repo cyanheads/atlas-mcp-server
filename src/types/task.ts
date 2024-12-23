@@ -232,6 +232,56 @@ export function validateTask(task: Task): { valid: boolean; errors: string[] } {
 /**
  * Validates parent-child task type relationships
  */
+/**
+ * Validates task dependency status
+ */
+export function validateDependencyStatus(
+    task: Task,
+    dependency: Task
+): { valid: boolean; reason?: string } {
+    // Cannot complete a task if its dependencies aren't completed
+    if (task.status === TaskStatus.COMPLETED && dependency.status !== TaskStatus.COMPLETED) {
+        return {
+            valid: false,
+            reason: `Cannot complete task '${task.path}' because its dependency '${dependency.path}' is not completed (current status: ${dependency.status})`
+        };
+    }
+
+    // Cannot set a task to IN_PROGRESS if any dependency is FAILED
+    if (task.status === TaskStatus.IN_PROGRESS && dependency.status === TaskStatus.FAILED) {
+        return {
+            valid: false,
+            reason: `Cannot set task '${task.path}' to IN_PROGRESS because its dependency '${dependency.path}' has FAILED`
+        };
+    }
+
+    // If any dependency is BLOCKED, the dependent task should be BLOCKED
+    if (dependency.status === TaskStatus.BLOCKED && task.status !== TaskStatus.BLOCKED) {
+        return {
+            valid: false,
+            reason: `Task '${task.path}' should be BLOCKED because its dependency '${dependency.path}' is BLOCKED`
+        };
+    }
+
+    // If any dependency is PENDING and task is being completed, block it
+    if (task.status === TaskStatus.COMPLETED && dependency.status === TaskStatus.PENDING) {
+        return {
+            valid: false,
+            reason: `Cannot complete task '${task.path}' because its dependency '${dependency.path}' hasn't been started yet (status: PENDING)`
+        };
+    }
+
+    // If any dependency is IN_PROGRESS and task is being completed, block it
+    if (task.status === TaskStatus.COMPLETED && dependency.status === TaskStatus.IN_PROGRESS) {
+        return {
+            valid: false,
+            reason: `Cannot complete task '${task.path}' because its dependency '${dependency.path}' is still in progress`
+        };
+    }
+
+    return { valid: true };
+}
+
 export function isValidTaskHierarchy(parentType: TaskType, childType: TaskType): { valid: boolean; reason?: string } {
     switch (parentType) {
         case TaskType.MILESTONE:
