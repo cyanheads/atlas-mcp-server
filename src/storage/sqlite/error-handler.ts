@@ -1,18 +1,12 @@
+import { BaseError } from '../../errors/base-error.js';
 import { ErrorCodes, createError, type ErrorCode } from '../../errors/index.js';
+import {
+  isDatabaseError,
+  isTransientError,
+  toSerializableError,
+  summarizeError,
+} from '../../utils/error-utils.js';
 import { Logger } from '../../logging/index.js';
-
-/**
- * Helper function to create storage errors with consistent operation naming
- */
-export function createStorageError(
-  code: ErrorCode,
-  message: string,
-  operation: string = 'SqliteStorage',
-  userMessage?: string,
-  metadata?: Record<string, unknown>
-): Error {
-  return createError(code, message, `SqliteStorage.${operation}`, userMessage, metadata);
-}
 
 /**
  * SQLite error codes and their meanings
@@ -27,6 +21,19 @@ export const SQLITE_ERROR_CODES = {
   SQLITE_READONLY: 8, // Attempt to write to readonly database
   SQLITE_BUSY: 5, // Database is busy
 };
+
+/**
+ * Helper function to create storage errors with consistent operation naming
+ */
+export function createStorageError(
+  code: ErrorCode,
+  message: string,
+  operation: string = 'SqliteStorage',
+  userMessage?: string,
+  metadata?: Record<string, unknown>
+): Error {
+  return createError(code, message, `SqliteStorage.${operation}`, userMessage, metadata);
+}
 
 /**
  * Helper function to format error details for logging and error creation
@@ -46,7 +53,7 @@ interface ErrorDetails extends Record<string, unknown> {
   customProps?: Record<string, unknown>;
 }
 
-export function formatErrorDetails(error: unknown): ErrorDetails {
+function formatErrorDetails(error: unknown): ErrorDetails {
   if (error instanceof Error) {
     const details: ErrorDetails = {
       name: error.name,
@@ -116,7 +123,7 @@ export function formatErrorDetails(error: unknown): ErrorDetails {
 }
 
 /**
- * Helper class to handle SQLite errors with logging
+ * Unified SQLite error handler with comprehensive error handling and logging
  */
 export class SqliteErrorHandler {
   private readonly logger: Logger;
@@ -126,35 +133,87 @@ export class SqliteErrorHandler {
   }
 
   /**
-   * Handles storage operation errors with consistent logging and error creation
+   * Handle storage operation errors with comprehensive error handling and logging
    */
   handleError(error: unknown, operation: string, context?: Record<string, unknown>): never {
-    const errorDetails = formatErrorDetails(error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Already handled errors
+    if (error instanceof BaseError) {
+      throw error;
+    }
 
-    // Enhanced error logging with operation context
-    this.logger.error(`Failed to ${operation}`, {
+    const errorDetails = formatErrorDetails(error);
+    const timestamp = Date.now();
+
+    // Database errors
+    if (isDatabaseError(error)) {
+      const sqliteError = error as any;
+      const code = sqliteError.code || 'UNKNOWN_DB_ERROR';
+      const message = sqliteError.message || 'Database operation failed';
+
+      this.logger.error('Database error occurred', {
+        error: errorDetails,
+        context: {
+          ...context,
+          operation,
+          timestamp,
+          sqliteError: errorDetails.sqliteError,
+        },
+      });
+
+      throw createStorageError(
+        ErrorCodes.STORAGE_ERROR,
+        message,
+        operation,
+        `Database error: ${code}`,
+        {
+          ...context,
+          sqliteCode: code,
+          isTransient: isTransientError(error),
+          error: errorDetails,
+        }
+      );
+    }
+
+    // System errors
+    if (error instanceof Error) {
+      this.logger.error('System error occurred', {
+        error: errorDetails,
+        context: {
+          ...context,
+          operation,
+          timestamp,
+        },
+      });
+
+      throw createStorageError(
+        ErrorCodes.STORAGE_ERROR,
+        error.message,
+        operation,
+        'System error occurred',
+        {
+          ...context,
+          originalError: summarizeError(error),
+          isTransient: isTransientError(error),
+          error: errorDetails,
+        }
+      );
+    }
+
+    // Unknown errors
+    this.logger.error('Unknown error occurred', {
       error: errorDetails,
       context: {
         ...context,
         operation,
-        timestamp: Date.now(),
+        timestamp,
       },
     });
 
-    // Log additional SQLite-specific details if available
-    if (errorDetails.sqliteError) {
-      this.logger.error('SQLite error details', {
-        sqliteError: errorDetails.sqliteError,
-        operation,
-      });
-    }
-
     throw createStorageError(
       ErrorCodes.STORAGE_ERROR,
-      `Failed to ${operation}`,
+      'An unexpected error occurred',
       operation,
-      `Storage operation failed: ${errorMessage}`,
+      'Unknown error type',
       {
         ...context,
         error: errorDetails,
@@ -163,23 +222,21 @@ export class SqliteErrorHandler {
   }
 
   /**
-   * Handles initialization errors with detailed logging
+   * Handle initialization errors with detailed logging
    */
   handleInitError(error: unknown, config: Record<string, unknown>): never {
     const errorDetails = formatErrorDetails(error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const timestamp = Date.now();
 
-    // Enhanced initialization error logging
     this.logger.error('Failed to initialize SQLite storage', {
       error: errorDetails,
       context: {
         config,
-        timestamp: Date.now(),
+        timestamp,
         operation: 'initialize',
       },
     });
 
-    // Log SQLite-specific initialization details
     if (errorDetails.sqliteError) {
       this.logger.error('SQLite initialization error details', {
         sqliteError: errorDetails.sqliteError,
@@ -195,11 +252,75 @@ export class SqliteErrorHandler {
       ErrorCodes.STORAGE_INIT,
       'Failed to initialize SQLite storage',
       'initialize',
-      `Storage initialization failed: ${errorMessage}`,
+      `Storage initialization failed: ${error instanceof Error ? error.message : String(error)}`,
       {
         config,
         error: errorDetails,
       }
     );
+  }
+
+  /**
+   * Handle connection errors
+   */
+  handleConnectionError(error: unknown, context?: Record<string, unknown>): never {
+    return this.handleError(error, 'connect', {
+      ...context,
+      phase: 'connection',
+    });
+  }
+
+  /**
+   * Handle transaction errors
+   */
+  handleTransactionError(error: unknown, context?: Record<string, unknown>): never {
+    return this.handleError(error, 'transaction', {
+      ...context,
+      phase: 'transaction',
+    });
+  }
+
+  /**
+   * Handle query errors with query context
+   */
+  handleQueryError(error: unknown, query: string, params?: unknown[]): never {
+    return this.handleError(error, 'query', {
+      query,
+      params,
+      phase: 'query',
+    });
+  }
+
+  /**
+   * Handle maintenance operation errors
+   */
+  handleMaintenanceError(error: unknown, operation: string): never {
+    return this.handleError(error, operation, {
+      phase: 'maintenance',
+    });
+  }
+
+  /**
+   * Handle cleanup errors
+   */
+  handleCleanupError(error: unknown, context?: Record<string, unknown>): never {
+    return this.handleError(error, 'cleanup', {
+      ...context,
+      phase: 'cleanup',
+    });
+  }
+
+  /**
+   * Log warning without throwing
+   */
+  logWarning(message: string, error: unknown, context?: Record<string, unknown>): void {
+    const errorDetails = formatErrorDetails(error);
+    this.logger.warn(message, {
+      error: errorDetails,
+      context: {
+        ...context,
+        timestamp: Date.now(),
+      },
+    });
   }
 }
