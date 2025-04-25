@@ -1,3 +1,5 @@
+[![MseeP Badge](https://mseep.net/pr/cyanheads-atlas-mcp-server-badge.jpg)](https://mseep.ai/app/cyanheads-atlas-mcp-server)
+
 # ATLAS: Task Management System
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue.svg)](https://www.typescriptlang.org/)
