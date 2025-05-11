@@ -55,6 +55,7 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "fuzzysort": "^3.1.0",
+    "jsonwebtoken": "^9.0.2",
     "nanoid": "^5.1.5",
     "neo4j-driver": "^5.28.1",
     "node-cron": "^4.0.3",
@@ -68,7 +69,10 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node-schedule": "^2.1.7",
+    "@types/sanitize-html": "^2.16.0",
+    "@types/validator": "^13.15.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
