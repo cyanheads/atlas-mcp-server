@@ -2,8 +2,8 @@ import { ProjectService } from '../../../services/neo4j/projectService.js';
 import { ProjectDependencyType } from '../../../services/neo4j/types.js'; // Import the enum
 import { BaseErrorCode, McpError, ProjectErrorCode } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasProjectCreateInput, AtlasProjectCreateSchema } from "./types.js";
 import { formatProjectCreateResponse } from "./responseFormat.js";
 
@@ -60,7 +60,7 @@ export const atlasCreateProject = async (
                   'Dependency created during project creation'
                 );
               } catch (error) {
-                logger.warn(`Failed to create dependency for project ${createdProject.id} to ${dependencyId}`, {
+                logger.warning(`Failed to create dependency for project ${createdProject.id} to ${dependencyId}`, {
                   error,
                   projectId: createdProject.id,
                   dependencyId
@@ -131,7 +131,7 @@ export const atlasCreateProject = async (
               'Dependency created during project creation'
             );
           } catch (error) {
-            logger.warn(`Failed to create dependency for project ${project.id} to ${dependencyId}`, {
+            logger.warning(`Failed to create dependency for project ${project.id} to ${dependencyId}`, {
               error,
               projectId: project.id,
               dependencyId

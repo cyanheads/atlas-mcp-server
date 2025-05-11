@@ -1,8 +1,8 @@
 import { SearchService } from '../../../services/neo4j/searchService.js';
 import { BaseErrorCode, McpError } from '../../../types/errors.js';
 import { ResponseFormat } from '../../../types/mcp.js';
-import { logger } from '../../../utils/logger.js';
-import { ToolContext } from '../../../utils/security.js';
+import { ToolContext } from '../../../types/tool.js';
+import { logger } from '../../../utils/internal/logger.js';
 import { formatUnifiedSearchResponse } from './responseFormat.js';
 // Assuming UnifiedSearchResponse is defined correctly in types.ts
 import { UnifiedSearchRequestInput, UnifiedSearchRequestSchema, UnifiedSearchResponse } from './types.js';

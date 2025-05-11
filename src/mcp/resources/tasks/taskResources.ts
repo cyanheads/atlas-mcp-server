@@ -4,7 +4,7 @@ import { TaskService } from "../../../services/neo4j/taskService.js";
 import { TaskFilterOptions } from "../../../services/neo4j/types.js";
 import { BaseErrorCode, McpError, ProjectErrorCode, TaskErrorCode } from "../../../types/errors.js";
 import { PriorityLevel, TaskStatus } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
+import { logger } from "../../../utils/internal/logger.js";
 import { ResourceTemplates, ResourceURIs, toTaskResource } from "../types.js";
 
 /**
@@ -57,7 +57,7 @@ export function registerTaskResources(server: McpServer) {
             filters.status = 'completed';
             break;
           default:
-            logger.warn(`Invalid status value: ${status}, ignoring filter`);
+            logger.warning(`Invalid status value: ${status}, ignoring filter`);
         }
       }
 
@@ -78,7 +78,7 @@ export function registerTaskResources(server: McpServer) {
             filters.priority = 'critical';
             break;
           default:
-            logger.warn(`Invalid priority value: ${priority}, ignoring filter`);
+            logger.warning(`Invalid priority value: ${priority}, ignoring filter`);
         }
       }
 
@@ -109,7 +109,7 @@ export function registerTaskResources(server: McpServer) {
         if (validSortByValues.includes(sortBy)) {
           filters.sortBy = sortBy as 'priority' | 'createdAt' | 'status';
         } else {
-          logger.warn(`Invalid sortBy value: ${sortBy}, using default sorting`);
+          logger.warning(`Invalid sortBy value: ${sortBy}, using default sorting`);
         }
       }
 
@@ -120,7 +120,7 @@ export function registerTaskResources(server: McpServer) {
         if (validDirections.includes(sortDirection)) {
           filters.sortDirection = sortDirection as 'asc' | 'desc';
         } else {
-          logger.warn(`Invalid sortDirection value: ${sortDirection}, using default direction`);
+          logger.warning(`Invalid sortDirection value: ${sortDirection}, using default direction`);
         }
       }
 
@@ -297,7 +297,7 @@ export function registerTaskResources(server: McpServer) {
             filters.status = 'completed';
             break;
           default:
-            logger.warn(`Invalid status value: ${status}, ignoring filter`);
+            logger.warning(`Invalid status value: ${status}, ignoring filter`);
         }
       }
 
@@ -318,7 +318,7 @@ export function registerTaskResources(server: McpServer) {
             filters.priority = 'critical';
             break;
           default:
-            logger.warn(`Invalid priority value: ${priority}, ignoring filter`);
+            logger.warning(`Invalid priority value: ${priority}, ignoring filter`);
         }
       }
 
@@ -349,7 +349,7 @@ export function registerTaskResources(server: McpServer) {
         if (validSortByValues.includes(sortBy)) {
           filters.sortBy = sortBy as 'priority' | 'createdAt' | 'status';
         } else {
-          logger.warn(`Invalid sortBy value: ${sortBy}, using default sorting`);
+          logger.warning(`Invalid sortBy value: ${sortBy}, using default sorting`);
         }
       }
 
@@ -360,7 +360,7 @@ export function registerTaskResources(server: McpServer) {
         if (validDirections.includes(sortDirection)) {
           filters.sortDirection = sortDirection as 'asc' | 'desc';
         } else {
-          logger.warn(`Invalid sortDirection value: ${sortDirection}, using default direction`);
+          logger.warning(`Invalid sortDirection value: ${sortDirection}, using default direction`);
         }
       }
 

@@ -1,6 +1,6 @@
 import { McpError } from '../../../types/errors.js';
 import { BaseErrorCode } from '../../../types/errors.js';
-import { logger } from '../../../utils/logger.js';
+import { logger } from '../../../utils/internal/logger.js';
 import { 
   KnowledgeService,
   ProjectService

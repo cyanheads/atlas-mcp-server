@@ -4,7 +4,7 @@ import {
   TaskService
 } from '../../../services/neo4j/index.js';
 import { BaseErrorCode, McpError } from '../../../types/errors.js';
-import { logger } from '../../../utils/logger.js';
+import { logger } from '../../../utils/internal/logger.js';
 import { Project, ProjectListRequest, ProjectListResponse, Knowledge, Task } from './types.js'; // Import Knowledge and Task
 
 /**

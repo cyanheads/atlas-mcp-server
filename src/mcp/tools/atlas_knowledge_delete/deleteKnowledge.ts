@@ -1,8 +1,8 @@
 import { KnowledgeService } from "../../../services/neo4j/knowledgeService.js";
 import { BaseErrorCode, McpError } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasKnowledgeDeleteInput, AtlasKnowledgeDeleteSchema } from "./types.js";
 import { formatKnowledgeDeleteResponse } from "./responseFormat.js";
 
@@ -100,7 +100,7 @@ export const atlasDeleteKnowledge = async (
       const deleted = await KnowledgeService.deleteKnowledge(id);
       
       if (!deleted) {
-        logger.warn("Target knowledge item not found for removal operation", { 
+        logger.warning("Target knowledge item not found for removal operation", { 
           knowledgeId: id,
           requestId: context.requestContext?.requestId 
         });

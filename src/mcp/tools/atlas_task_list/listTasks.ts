@@ -1,8 +1,8 @@
 import { TaskService } from '../../../services/neo4j/taskService.js';
 import { ProjectService } from '../../../services/neo4j/projectService.js';
 import { BaseErrorCode, McpError, ProjectErrorCode } from '../../../types/errors.js';
-import { logger } from '../../../utils/logger.js';
-import { ToolContext } from '../../../utils/security.js';
+import { logger } from '../../../utils/internal/logger.js';
+import { ToolContext } from '../../../types/tool.js';
 import { TaskListRequestInput, TaskListRequestSchema } from './types.js';
 import { formatTaskListResponse } from './responseFormat.js';
 

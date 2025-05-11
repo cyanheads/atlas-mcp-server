@@ -1,6 +1,6 @@
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Neo4jKnowledge, Neo4jProject, Neo4jTask } from "../../services/neo4j/types.js";
-import { logger } from "../../utils/logger.js";
+import { logger } from "../../utils/internal/logger.js";
 
 /**
  * Resource URIs for the Atlas MCP resources

@@ -2,8 +2,8 @@ import { TaskService } from "../../../services/neo4j/taskService.js";
 import { ProjectService } from "../../../services/neo4j/projectService.js";
 import { BaseErrorCode, McpError, ProjectErrorCode } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasTaskCreateInput, AtlasTaskCreateSchema } from "./types.js";
 import { formatTaskCreateResponse } from "./responseFormat.js";
 
@@ -72,7 +72,7 @@ export const atlasCreateTask = async (
                   dependencyId
                 );
               } catch (error) {
-                logger.warn(`Failed to create dependency for task ${createdTask.id} to ${dependencyId}`, {
+                logger.warning(`Failed to create dependency for task ${createdTask.id} to ${dependencyId}`, {
                   error,
                   taskId: createdTask.id,
                   dependencyId
@@ -155,7 +155,7 @@ export const atlasCreateTask = async (
               dependencyId
             );
           } catch (error) {
-            logger.warn(`Failed to create dependency for task ${task.id} to ${dependencyId}`, {
+            logger.warning(`Failed to create dependency for task ${task.id} to ${dependencyId}`, {
               error,
               taskId: task.id,
               dependencyId

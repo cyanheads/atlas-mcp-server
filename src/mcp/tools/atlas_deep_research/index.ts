@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { BaseErrorCode, McpError } from "../../../types/errors.js";
 import { McpToolResponse, ResponseFormat } from "../../../types/mcp.js";
-import { createToolExample, createToolMetadata, registerTool } from "../../../types/tool.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js"; // Assuming ToolContext might be used for permissions
+import { createToolExample, createToolMetadata, registerTool, ToolContext } from "../../../types/tool.js";
+import { logger } from "../../../utils/internal/logger.js";
+// ToolContext is now imported from ../../../types/tool.js
 import { deepResearch } from "./deepResearch.js";
 import { formatDeepResearchResponse } from "./responseFormat.js";
 import {

@@ -3,7 +3,7 @@ import { KnowledgeService } from "../../../services/neo4j/knowledgeService.js";
 import { ProjectService } from "../../../services/neo4j/projectService.js";
 import { KnowledgeFilterOptions } from "../../../services/neo4j/types.js";
 import { toKnowledgeResource, ResourceTemplates, ResourceURIs } from "../types.js";
-import { logger } from "../../../utils/logger.js";
+import { logger } from "../../../utils/internal/logger.js";
 import { BaseErrorCode, McpError, ProjectErrorCode } from "../../../types/errors.js";
 
 /**

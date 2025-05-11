@@ -3,8 +3,8 @@ import { KnowledgeService } from '../../../services/neo4j/knowledgeService.js';
 import { ProjectService } from '../../../services/neo4j/projectService.js';
 import { TaskService } from '../../../services/neo4j/taskService.js'; // Import TaskService
 import { BaseErrorCode, McpError } from '../../../types/errors.js';
-import { logger } from '../../../utils/logger.js';
-import { sanitizeInput } from '../../../utils/security.js';
+import { logger } from '../../../utils/internal/logger.js';
+import { sanitization } from '../../../utils/security/sanitization.js';
 import {
   AtlasDeepResearchInput,
   DeepResearchResult,
@@ -55,12 +55,12 @@ export async function deepResearch(
     // 2. Prepare Root Research Plan Node Data
     const planNodeId = input.planNodeId || generateKnowledgeId('plan');
     const rootTextParts: string[] = [
-      `Research Plan: ${sanitizeInput.string(input.researchTopic)}`,
-      `Goal: ${sanitizeInput.string(input.researchGoal)}`,
+      `Research Plan: ${sanitization.sanitizeString(input.researchTopic)}`,
+      `Goal: ${sanitization.sanitizeString(input.researchGoal)}`,
     ];
     if (input.scopeDefinition) {
       rootTextParts.push(
-        `Scope: ${sanitizeInput.string(input.scopeDefinition)}`
+        `Scope: ${sanitization.sanitizeString(input.scopeDefinition)}`
       );
     }
     const rootText = rootTextParts.join('\n\n'); // Combine parts into the main text content
@@ -70,8 +70,8 @@ export async function deepResearch(
       'research-plan',
       'research-root',
       'status:active', // Initialize the plan as active
-      `topic:${sanitizeInput
-        .string(input.researchTopic)
+      `topic:${sanitization
+        .sanitizeString(input.researchTopic)
         .toLowerCase()
         .replace(/\s+/g, '-') // Convert topic to a URL-friendly tag format
         .slice(0, 50)}`, // Limit tag length
@@ -111,10 +111,10 @@ export async function deepResearch(
 
       // Sanitize search queries before joining
       const searchQueriesString = (subTopic.initialSearchQueries || [])
-        .map((kw) => sanitizeInput.string(kw))
+        .map((kw) => sanitization.sanitizeString(kw))
         .join(', ');
       // Construct the text content for the sub-topic node
-      const subTopicText = `Research Question: ${sanitizeInput.string(
+      const subTopicText = `Research Question: ${sanitization.sanitizeString(
         subTopic.question
       )}\n\nInitial Search Queries: ${searchQueriesString || 'None provided'}`;
 
@@ -125,8 +125,8 @@ export async function deepResearch(
         // `parent-plan:${planNodeId}`, // Replaced by relationship if implemented
         ...(subTopic.initialSearchQueries?.map(
           (kw: string) =>
-            `search-query:${sanitizeInput
-              .string(kw) // Create tags for each search query
+            `search-query:${sanitization
+              .sanitizeString(kw) // Create tags for each search query
               .toLowerCase()
               .replace(/\s+/g, '-')
               .slice(0, 50)}`
@@ -157,10 +157,10 @@ export async function deepResearch(
       // Create Task if requested
       if (tasksToCreate) {
         logger.debug(`Creating task for sub-topic node ${subTopicNodeId}`);
-        const taskTitle = `Research: ${sanitizeInput.string(
+        const taskTitle = `Research: ${sanitization.sanitizeString(
           subTopic.question
         )}`;
-        const taskDescription = `Investigate the research question: "${sanitizeInput.string(
+        const taskDescription = `Investigate the research question: "${sanitization.sanitizeString(
           subTopic.question
         )}"\n\nInitial Search Queries: ${
           searchQueriesString || 'None provided'

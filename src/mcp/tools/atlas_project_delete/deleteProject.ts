@@ -1,8 +1,8 @@
 import { ProjectService } from "../../../services/neo4j/projectService.js";
 import { BaseErrorCode, McpError, ProjectErrorCode } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasProjectDeleteInput, AtlasProjectDeleteSchema } from "./types.js";
 import { formatProjectDeleteResponse } from "./responseFormat.js";
 
@@ -100,7 +100,7 @@ export const atlasDeleteProject = async (
       const deleted = await ProjectService.deleteProject(id);
       
       if (!deleted) {
-        logger.warn("Target project not found for removal operation", { 
+        logger.warning("Target project not found for removal operation", { 
           projectId: id,
           requestId: context.requestContext?.requestId 
         });

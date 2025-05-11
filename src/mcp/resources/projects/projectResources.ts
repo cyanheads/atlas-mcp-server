@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ProjectService } from "../../../services/neo4j/projectService.js";
-import { toProjectResource, ResourceTemplates, ResourceURIs } from "../types.js";
-import { logger } from "../../../utils/logger.js";
 import { BaseErrorCode, McpError, ProjectErrorCode } from "../../../types/errors.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ResourceTemplates, ResourceURIs, toProjectResource } from "../types.js";
 
 /**
  * Register Project Resources

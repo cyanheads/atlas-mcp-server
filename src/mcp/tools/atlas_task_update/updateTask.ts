@@ -1,8 +1,8 @@
 import { TaskService } from "../../../services/neo4j/taskService.js";
 import { BaseErrorCode, McpError } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasTaskUpdateInput, AtlasTaskUpdateSchema } from "./types.js";
 import { formatTaskUpdateResponse } from "./responseFormat.js";
 

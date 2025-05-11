@@ -1,8 +1,8 @@
 import { TaskService } from "../../../services/neo4j/taskService.js";
 import { BaseErrorCode, McpError } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { AtlasTaskDeleteInput, AtlasTaskDeleteSchema } from "./types.js";
 import { formatTaskDeleteResponse } from "./responseFormat.js";
 
@@ -100,7 +100,7 @@ export const atlasDeleteTask = async (
       const deleted = await TaskService.deleteTask(id);
       
       if (!deleted) {
-        logger.warn("Target task not found for removal operation", { 
+        logger.warning("Target task not found for removal operation", { 
           taskId: id,
           requestId: context.requestContext?.requestId 
         });

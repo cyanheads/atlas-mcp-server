@@ -1,7 +1,7 @@
 import { BaseErrorCode, McpError } from "../../../types/errors.js";
 import { ResponseFormat, createToolResponse } from "../../../types/mcp.js";
-import { logger } from "../../../utils/logger.js";
-import { ToolContext } from "../../../utils/security.js";
+import { logger } from "../../../utils/internal/logger.js";
+import { ToolContext } from "../../../types/tool.js";
 import { formatDatabaseCleanResponse } from "./responseFormat.js";
 import { AtlasDatabaseCleanInput, AtlasDatabaseCleanSchema } from "./types.js";
 import { neo4jDriver } from "../../../services/neo4j/driver.js";
@@ -23,7 +23,7 @@ export const atlasDatabaseClean = async (
     const validatedInput: AtlasDatabaseCleanInput = AtlasDatabaseCleanSchema.parse(input);
     
     // Log the operation start
-    logger.warn("Executing complete database reset operation", {
+    logger.warning("Executing complete database reset operation", {
       requestId: context.requestContext?.requestId
     });
     
@@ -38,7 +38,7 @@ export const atlasDatabaseClean = async (
       const executionTime = Date.now() - startTime;
       
       // Log successful operation
-      logger.warn("Database reset completed successfully", {
+      logger.warning("Database reset completed successfully", {
         requestId: context.requestContext?.requestId,
         executionTime: `${executionTime}ms`,
       });
