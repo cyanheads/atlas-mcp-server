@@ -1,4 +1,11 @@
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { createToolResponse } from "../../../types/mcp.js"; // Import the new response creator
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Interface for single project deletion response
@@ -45,52 +52,56 @@ export class BulkProjectDeleteFormatter implements ResponseFormatter<BulkProject
   format(data: BulkProjectDeleteResponse): string {
     const { success, message, deleted, errors } = data;
     
-    // Create a structured operation summary
     const summary = `Project Cleanup Operation\n\n` +
-      `Status: ${success ? '✅ Complete Success' : '⚠️ Partial Success'}\n` +
+      `Status: ${success && errors.length === 0 ? '✅ Complete Success' : (errors.length > 0 ? '⚠️ Partial Success / Errors' : '✅ Success (No items or no errors)')}\n` +
       `Summary: ${message}\n` +
       `Removed: ${deleted.length} project(s)\n` +
       `Errors: ${errors.length} error(s)\n`;
     
-    // List successfully processed entities
     let deletedSection = "";
     if (deleted.length > 0) {
-      deletedSection = `Removed Projects\n\n`;
-      deletedSection += `The following project identifiers were successfully removed:\n\n`;
-      deletedSection += deleted.map(id => `${id}`).join('\n');
+      deletedSection = `\n--- Removed Projects (${deleted.length}) ---\n\n`;
+      deletedSection += deleted.map(id => `- ${id}`).join('\n');
     }
     
-    // List operations that encountered errors
     let errorsSection = "";
     if (errors.length > 0) {
-      errorsSection = `Operation Errors\n\n`;
-      
-      errorsSection += errors.map((error, index) => {
-        return `${index + 1}. Failed to remove project ${error.projectId}\n\n` +
-          `Error Code: ${error.error.code}\n` +
-          `Message: ${error.error.message}\n` +
-          (error.error.details ? `Details: ${JSON.stringify(error.error.details)}\n` : "");
+      errorsSection = `\n--- Errors Encountered (${errors.length}) ---\n\n`;
+      errorsSection += errors.map((errorItem, index) => {
+        return `${index + 1}. Failed to remove ID: ${errorItem.projectId}\n` +
+          `   Error Code: ${errorItem.error.code}\n` +
+          `   Message: ${errorItem.error.message}` +
+          (errorItem.error.details ? `\n   Details: ${JSON.stringify(errorItem.error.details)}` : "");
       }).join("\n\n");
     }
     
-    return `${summary}\n\n${deletedSection}\n\n${errorsSection}`.trim();
+    return `${summary}${deletedSection}${errorsSection}`.trim();
   }
 }
 
 /**
  * Create a human-readable formatted response for the atlas_project_delete tool
  * 
- * @param data The structured project removal operation results
- * @param isError Whether this response represents an error condition
+ * @param data The structured project removal operation results (SingleProjectDeleteResponse or BulkProjectDeleteResponse)
+ * @param isError This parameter is effectively ignored as success is determined from data.success. Kept for signature consistency if needed.
  * @returns Formatted MCP tool response with appropriate structure
  */
 export function formatProjectDeleteResponse(data: any, isError = false): any {
-  // Determine if this is a single or bulk project response
-  const isBulkResponse = data.hasOwnProperty("deleted") && Array.isArray(data.deleted);
+  const isBulkResponse = data.hasOwnProperty("deleted") && Array.isArray(data.deleted) && data.hasOwnProperty("errors");
   
+  let formattedText: string;
+  let finalIsError: boolean;
+
   if (isBulkResponse) {
-    return createFormattedResponse(data, new BulkProjectDeleteFormatter(), isError);
+    const formatter = new BulkProjectDeleteFormatter();
+    const bulkData = data as BulkProjectDeleteResponse;
+    formattedText = formatter.format(bulkData);
+    finalIsError = !bulkData.success || bulkData.errors.length > 0;
   } else {
-    return createFormattedResponse(data, new SingleProjectDeleteFormatter(), isError);
+    const formatter = new SingleProjectDeleteFormatter();
+    const singleData = data as SingleProjectDeleteResponse;
+    formattedText = formatter.format(singleData);
+    finalIsError = !singleData.success;
   }
+  return createToolResponse(formattedText, finalIsError);
 }

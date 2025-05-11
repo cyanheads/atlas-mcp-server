@@ -1,5 +1,12 @@
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { createToolResponse } from "../../../types/mcp.js"; // Import the new response creator
 import { KnowledgeListResponse } from "./types.js";
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Formatter for structured knowledge query responses
@@ -83,5 +90,7 @@ export class KnowledgeListFormatter implements ResponseFormatter<KnowledgeListRe
  * @returns Formatted MCP tool response with appropriate structure
  */
 export function formatKnowledgeListResponse(data: any, isError = false): any {
-  return createFormattedResponse(data, new KnowledgeListFormatter(), isError);
+  const formatter = new KnowledgeListFormatter();
+  const formattedText = formatter.format(data as KnowledgeListResponse); // Assuming data is KnowledgeListResponse
+  return createToolResponse(formattedText, isError);
 }

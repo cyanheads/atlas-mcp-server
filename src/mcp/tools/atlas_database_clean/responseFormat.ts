@@ -1,5 +1,13 @@
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
 import { FormattedDatabaseCleanResponse } from "./types.js";
+import { createToolResponse } from "../../../types/mcp.js"; // Import the new response creator
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ * This was previously imported but is now defined locally as the original seems to be removed.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Formatter for database clean operation responses
@@ -36,5 +44,7 @@ export class DatabaseCleanFormatter implements ResponseFormatter<FormattedDataba
  * @returns Formatted MCP tool response with appropriate structure
  */
 export function formatDatabaseCleanResponse(data: FormattedDatabaseCleanResponse, isError = false): any {
-  return createFormattedResponse(data, new DatabaseCleanFormatter(), isError);
+  const formatter = new DatabaseCleanFormatter();
+  const formattedText = formatter.format(data);
+  return createToolResponse(formattedText, isError);
 }

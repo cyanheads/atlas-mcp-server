@@ -1,9 +1,13 @@
-import { McpToolResponse } from "../../../types/mcp.js";
-import {
-  createFormattedResponse,
-  ResponseFormatter,
-} from "../../../utils/responseFormatter.js";
+import { McpToolResponse, createToolResponse } from "../../../types/mcp.js"; // Import createToolResponse
 import { AtlasDeepResearchInput, DeepResearchResult } from "./types.js";
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ * This was previously imported but is now defined locally as the original seems to be removed.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Base response formatter for the `atlas_deep_research` tool.
@@ -123,8 +127,6 @@ export function formatDeepResearchResponse(
     }
   };
 
-  // Use the utility function `createFormattedResponse` with the raw data
-  // and the *contextual* formatter defined above.
-  // The `isError` flag is automatically inferred from `rawData.success`.
-  return createFormattedResponse(rawData, contextualFormatter);
+  const formattedText = contextualFormatter.format(rawData);
+  return createToolResponse(formattedText, !rawData.success);
 }

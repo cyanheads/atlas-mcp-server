@@ -1,11 +1,11 @@
 import { Neo4jTask } from "../../../services/neo4j/types.js";
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { createToolResponse, McpToolResponse } from "../../../types/mcp.js";
 import { TaskListResponse } from "./types.js";
 
 /**
  * Formatter for task list responses
  */
-export class TaskListFormatter implements ResponseFormatter<TaskListResponse> {
+class TaskListFormatter {
   format(data: TaskListResponse): string {
     // Destructure, providing default empty array for tasks if undefined/null
     const { tasks = [], total, page, limit, totalPages } = data; 
@@ -102,6 +102,8 @@ export class TaskListFormatter implements ResponseFormatter<TaskListResponse> {
  * @param isError Whether this response represents an error condition
  * @returns Formatted MCP tool response with appropriate structure
  */
-export function formatTaskListResponse(data: TaskListResponse, isError = false): any {
-  return createFormattedResponse(data, new TaskListFormatter(), isError);
+export function formatTaskListResponse(data: TaskListResponse, isError = false): McpToolResponse {
+  const formatter = new TaskListFormatter();
+  const formattedText = formatter.format(data);
+  return createToolResponse(formattedText, isError);
 }

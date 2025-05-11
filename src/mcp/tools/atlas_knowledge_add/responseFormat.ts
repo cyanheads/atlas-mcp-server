@@ -1,4 +1,11 @@
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { createToolResponse } from "../../../types/mcp.js"; // Import the new response creator
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Interface for a single knowledge item response
@@ -12,10 +19,10 @@ interface SingleKnowledgeResponse {
   citations?: string[];
   createdAt: string;
   updatedAt: string;
-  properties?: any;
-  identity?: number;
-  labels?: string[];
-  elementId?: string;
+  properties?: any; // Neo4j properties if not fully mapped
+  identity?: number;  // Neo4j internal ID
+  labels?: string[];  // Neo4j labels
+  elementId?: string; // Neo4j element ID
 }
 
 /**
@@ -27,7 +34,7 @@ interface BulkKnowledgeResponse {
   created: (SingleKnowledgeResponse & { properties?: any; identity?: number; labels?: string[]; elementId?: string; })[];
   errors: {
     index: number;
-    knowledge: any;
+    knowledge: any; // Original input for the failed item
     error: {
       code: string;
       message: string;
@@ -41,9 +48,9 @@ interface BulkKnowledgeResponse {
  */
 export class SingleKnowledgeFormatter implements ResponseFormatter<SingleKnowledgeResponse> {
   format(data: SingleKnowledgeResponse): string {
-    // Extract knowledge properties from Neo4j structure
+    // Extract knowledge properties from Neo4j structure or direct data
     const knowledgeData = data.properties || data;
-    const { id, projectId, domain, createdAt } = knowledgeData;
+    const { id, projectId, domain, createdAt, text, tags, citations, updatedAt } = knowledgeData;
     
     // Create a summary section
     const summary = `Knowledge Item Added Successfully\n\n` +
@@ -52,8 +59,8 @@ export class SingleKnowledgeFormatter implements ResponseFormatter<SingleKnowled
       `Domain: ${domain || 'Uncategorized'}\n` +
       `Created: ${createdAt ? new Date(createdAt).toLocaleString() : 'Unknown Date'}\n`;
     
-    // Create a comprehensive details section with all knowledge properties
-    const fieldLabels = {
+    // Create a comprehensive details section
+    const fieldLabels: Record<keyof SingleKnowledgeResponse, string> = {
       id: "ID",
       projectId: "Project ID",
       text: "Content",
@@ -61,44 +68,38 @@ export class SingleKnowledgeFormatter implements ResponseFormatter<SingleKnowled
       domain: "Domain",
       citations: "Citations",
       createdAt: "Created At",
-      updatedAt: "Updated At"
+      updatedAt: "Updated At",
+      // Neo4j specific fields are generally not for direct user display unless needed
+      properties: "Raw Properties", 
+      identity: "Neo4j Identity",
+      labels: "Neo4j Labels",
+      elementId: "Neo4j Element ID"
     };
     
     let details = `Knowledge Item Details\n\n`;
     
-    // Build details as key-value pairs
-    Object.entries(fieldLabels).forEach(([key, label]) => {
-      if (knowledgeData[key] !== undefined) {
+    // Build details as key-value pairs for relevant fields
+    (Object.keys(fieldLabels) as Array<keyof SingleKnowledgeResponse>).forEach(key => {
+      if (knowledgeData[key] !== undefined && ['properties', 'identity', 'labels', 'elementId'].indexOf(key as string) === -1) { // Exclude raw Neo4j fields from default display
         let value = knowledgeData[key];
         
-        // Format arrays
         if (Array.isArray(value)) {
-          value = value.length > 0 ? JSON.stringify(value) : "None";
-        }
-        // Format objects
-        else if (typeof value === "object" && value !== null) {
-          value = JSON.stringify(value);
-        }
-        // Format dates more readably if they look like ISO dates
-        else if (typeof value === "string" && 
-                /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+          value = value.length > 0 ? value.join(', ') : "None";
+        } else if (typeof value === 'string' && (key === 'createdAt' || key === 'updatedAt')) {
           try {
             value = new Date(value).toLocaleString();
-          } catch (e) {
-            // Keep original if parsing fails
-          }
+          } catch (e) { /* Keep original if parsing fails */ }
         }
         
-        // For text, limit the length in display
         if (key === 'text' && typeof value === 'string' && value.length > 100) {
           value = value.substring(0, 100) + '... (truncated)';
         }
         
-        details += `${label}: ${value}\n`;
+        details += `${fieldLabels[key]}: ${value}\n`;
       }
     });
     
-    return `${summary}\n\n${details}`;
+    return `${summary}\n${details}`;
   }
 }
 
@@ -109,61 +110,64 @@ export class BulkKnowledgeFormatter implements ResponseFormatter<BulkKnowledgeRe
   format(data: BulkKnowledgeResponse): string {
     const { success, message, created, errors } = data;
     
-    // Create a summary section with operation results
-    const summary = `${success ? "Knowledge Items Added Successfully" : "Knowledge Addition Completed with Errors"}\n\n` +
-      `Status: ${success ? "✅ Success" : "⚠️ Partial Success"}\n` +
+    const summary = `${success && errors.length === 0 ? "Knowledge Items Added Successfully" : "Knowledge Addition Completed"}\n\n` +
+      `Status: ${success && errors.length === 0 ? "✅ Success" : (errors.length > 0 ? "⚠️ Partial Success / Errors" : "✅ Success (No items or no errors)")}\n` +
       `Summary: ${message}\n` +
       `Added: ${created.length} item(s)\n` +
       `Errors: ${errors.length} error(s)\n`;
     
-    // List the successfully created knowledge items
     let createdSection = "";
     if (created.length > 0) {
-      createdSection = `Added Knowledge Items\n\n`;
-      
+      createdSection = `\n--- Added Knowledge Items (${created.length}) ---\n\n`;
       createdSection += created.map((item, index) => {
-        // Extract knowledge properties from Neo4j structure
         const itemData = item.properties || item;
-        return `${index + 1}. Knowledge Item (${itemData.domain || 'Uncategorized'})\n` +
-          `ID: ${itemData.id || 'Unknown ID'}\n` +
-          `Project ID: ${itemData.projectId || 'Unknown Project'}\n` +
-          `Tags: ${itemData.tags ? JSON.stringify(itemData.tags) : 'None'}\n` +
-          `Created: ${itemData.createdAt ? new Date(itemData.createdAt).toLocaleString() : 'Unknown Date'}\n`;
+        return `${index + 1}. ID: ${itemData.id || 'N/A'}\n` +
+          `   Project ID: ${itemData.projectId || 'N/A'}\n` +
+          `   Domain: ${itemData.domain || 'N/A'}\n` +
+          `   Tags: ${itemData.tags ? itemData.tags.join(', ') : 'None'}\n` +
+          `   Created: ${itemData.createdAt ? new Date(itemData.createdAt).toLocaleString() : 'N/A'}`;
       }).join("\n\n");
     }
     
-    // List any errors that occurred
     let errorsSection = "";
     if (errors.length > 0) {
-      errorsSection = `Errors\n\n`;
-      
-      errorsSection += errors.map((error, index) => {
-        const itemProject = error.knowledge?.projectId || 'Unknown Project';
-        return `${index + 1}. Error in Knowledge Item for Project "${itemProject}"\n\n` +
-          `Error Code: ${error.error.code}\n` +
-          `Message: ${error.error.message}\n` +
-          (error.error.details ? `Details: ${JSON.stringify(error.error.details)}\n` : "");
+      errorsSection = `\n--- Errors Encountered (${errors.length}) ---\n\n`;
+      errorsSection += errors.map((errorDetail, index) => {
+        const itemInput = errorDetail.knowledge;
+        return `${index + 1}. Error for item (Index: ${errorDetail.index})\n` +
+          `   Input Project ID: ${itemInput?.projectId || 'N/A'}\n` +
+          `   Input Domain: ${itemInput?.domain || 'N/A'}\n` +
+          `   Error Code: ${errorDetail.error.code}\n` +
+          `   Message: ${errorDetail.error.message}` +
+          (errorDetail.error.details ? `\n   Details: ${JSON.stringify(errorDetail.error.details)}` : "");
       }).join("\n\n");
     }
     
-    return `${summary}\n\n${createdSection}\n\n${errorsSection}`.trim();
+    return `${summary}${createdSection}${errorsSection}`.trim();
   }
 }
 
 /**
  * Create a formatted, human-readable response for the atlas_knowledge_add tool
  * 
- * @param data The raw knowledge addition response data
- * @param isError Whether this response represents an error condition
+ * @param data The raw knowledge addition response data (can be SingleKnowledgeResponse or BulkKnowledgeResponse)
+ * @param isError Whether this response represents an error condition (primarily for single responses if not inherent in data)
  * @returns Formatted MCP tool response with appropriate structure
  */
 export function formatKnowledgeAddResponse(data: any, isError = false): any {
-  // Determine if this is a single or bulk knowledge response
-  const isBulkResponse = data.hasOwnProperty("success") && data.hasOwnProperty("created");
+  const isBulkResponse = data.hasOwnProperty("success") && data.hasOwnProperty("created") && data.hasOwnProperty("errors");
   
+  let formattedText: string;
+  let finalIsError: boolean;
+
   if (isBulkResponse) {
-    return createFormattedResponse(data, new BulkKnowledgeFormatter(), isError);
+    const formatter = new BulkKnowledgeFormatter();
+    formattedText = formatter.format(data as BulkKnowledgeResponse);
+    finalIsError = !data.success || data.errors.length > 0;
   } else {
-    return createFormattedResponse(data, new SingleKnowledgeFormatter(), isError);
+    const formatter = new SingleKnowledgeFormatter();
+    formattedText = formatter.format(data as SingleKnowledgeResponse);
+    finalIsError = isError; // For single responses, rely on the passed isError or enhance if data has success field
   }
+  return createToolResponse(formattedText, finalIsError);
 }

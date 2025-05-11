@@ -1,5 +1,12 @@
 import { ProjectResponse } from "../../../types/mcp.js";
-import { ResponseFormatter, createFormattedResponse, objectToMarkdownTable } from "../../../utils/responseFormatter.js";
+import { createToolResponse } from "../../../types/mcp.js"; // Import the new response creator
+
+/**
+ * Defines a generic interface for formatting data into a string.
+ */
+interface ResponseFormatter<T> {
+  format(data: T): string;
+}
 
 /**
  * Extends the ProjectResponse to include Neo4j properties structure 
@@ -20,7 +27,7 @@ interface BulkProjectResponse {
   created: (ProjectResponse & { properties?: any; identity?: number; labels?: string[]; elementId?: string; })[];
   errors: {
     index: number;
-    project: any;
+    project: any; // Original input for the failed project
     error: {
       code: string;
       message: string;
@@ -34,9 +41,9 @@ interface BulkProjectResponse {
  */
 export class SingleProjectFormatter implements ResponseFormatter<SingleProjectResponse> {
   format(data: SingleProjectResponse): string {
-    // Extract project properties from Neo4j structure
+    // Extract project properties from Neo4j structure or direct data
     const projectData = data.properties || data;
-    const { name, id, status, taskType, createdAt } = projectData;
+    const { name, id, status, taskType, createdAt, description, urls, completionRequirements, outputFormat, updatedAt } = projectData;
     
     // Create a summary section
     const summary = `Project Created Successfully\n\n` +
@@ -46,8 +53,8 @@ export class SingleProjectFormatter implements ResponseFormatter<SingleProjectRe
       `Type: ${taskType || 'Unknown Type'}\n` +
       `Created: ${createdAt ? new Date(createdAt).toLocaleString() : 'Unknown Date'}\n`;
     
-    // Create a comprehensive details section with all project properties
-    const fieldLabels = {
+    // Create a comprehensive details section
+    const fieldLabels: Record<keyof SingleProjectResponse, string> = {
       id: "ID",
       name: "Name",
       description: "Description",
@@ -57,39 +64,38 @@ export class SingleProjectFormatter implements ResponseFormatter<SingleProjectRe
       outputFormat: "Output Format",
       taskType: "Task Type",
       createdAt: "Created At",
-      updatedAt: "Updated At"
+      updatedAt: "Updated At",
+      // Neo4j specific fields
+      properties: "Raw Properties",
+      identity: "Neo4j Identity",
+      labels: "Neo4j Labels",
+      elementId: "Neo4j Element ID",
+      // Fields from ProjectResponse that might not be in projectData directly if it's just properties
+      dependencies: "Dependencies" // Assuming ProjectResponse might have this
     };
     
-    let details = `Project Details\n\n`;
+    let details = `Project Details:\n`;
     
-    // Build details as key-value pairs
-    Object.entries(fieldLabels).forEach(([key, label]) => {
-      if (projectData[key] !== undefined) {
+    // Build details as key-value pairs for relevant fields
+    const relevantKeys: (keyof SingleProjectResponse)[] = ['id', 'name', 'description', 'status', 'taskType', 'completionRequirements', 'outputFormat', 'urls', 'createdAt', 'updatedAt'];
+    
+    relevantKeys.forEach(key => {
+      if (projectData[key] !== undefined && projectData[key] !== null) {
         let value = projectData[key];
         
-        // Format arrays
         if (Array.isArray(value)) {
-          value = value.length > 0 ? JSON.stringify(value) : "None";
-        }
-        // Format objects
-        else if (typeof value === "object" && value !== null) {
-          value = JSON.stringify(value);
-        }
-        // Format dates more readably if they look like ISO dates
-        else if (typeof value === "string" && 
-                /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+          value = value.length > 0 ? value.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join(', ') : "None";
+        } else if (typeof value === 'string' && (key === 'createdAt' || key === 'updatedAt')) {
           try {
             value = new Date(value).toLocaleString();
-          } catch (e) {
-            // Keep original if parsing fails
-          }
+          } catch (e) { /* Keep original if parsing fails */ }
         }
         
-        details += `${label}: ${value}\n`;
+        details += `  ${fieldLabels[key] || key}: ${value}\n`;
       }
     });
     
-    return `${summary}\n\n${details}`;
+    return `${summary}\n${details}`;
   }
 }
 
@@ -100,61 +106,65 @@ export class BulkProjectFormatter implements ResponseFormatter<BulkProjectRespon
   format(data: BulkProjectResponse): string {
     const { success, message, created, errors } = data;
     
-    // Create a summary section with operation results
-    const summary = `${success ? "Projects Created Successfully" : "Project Creation Completed with Errors"}\n\n` +
-      `Status: ${success ? "✅ Success" : "⚠️ Partial Success"}\n` +
+    const summary = `${success && errors.length === 0 ? "Projects Created Successfully" : "Project Creation Completed"}\n\n` +
+      `Status: ${success && errors.length === 0 ? "✅ Success" : (errors.length > 0 ? "⚠️ Partial Success / Errors" : "✅ Success (No items or no errors)")}\n` +
       `Summary: ${message}\n` +
       `Created: ${created.length} project(s)\n` +
       `Errors: ${errors.length} error(s)\n`;
     
-    // List the successfully created projects
     let createdSection = "";
     if (created.length > 0) {
-      createdSection = `Created Projects\n\n`;
-      
+      createdSection = `\n--- Created Projects (${created.length}) ---\n\n`;
       createdSection += created.map((project, index) => {
-        // Extract project properties from Neo4j structure
         const projectData = project.properties || project;
-        return `${index + 1}. ${projectData.name || 'Unnamed Project'}\n\n` +
-          `ID: ${projectData.id || 'Unknown ID'}\n` +
-          `Type: ${projectData.taskType || 'Unknown Type'}\n` +
-          `Status: ${projectData.status || 'Unknown Status'}\n` +
-          `Created: ${projectData.createdAt ? new Date(projectData.createdAt).toLocaleString() : 'Unknown Date'}\n`;
+        return `${index + 1}. ${projectData.name || 'Unnamed Project'} (ID: ${projectData.id || 'N/A'})\n` +
+          `   Type: ${projectData.taskType || 'N/A'}\n` +
+          `   Status: ${projectData.status || 'N/A'}\n` +
+          `   Created: ${projectData.createdAt ? new Date(projectData.createdAt).toLocaleString() : 'N/A'}`;
       }).join("\n\n");
     }
     
-    // List any errors that occurred
     let errorsSection = "";
     if (errors.length > 0) {
-      errorsSection = `Errors\n\n`;
-      
-      errorsSection += errors.map((error, index) => {
-        const projectName = error.project?.name || `Project at index ${error.index}`;
-        return `${index + 1}. Error in "${projectName}"\n\n` +
-          `Error Code: ${error.error.code}\n` +
-          `Message: ${error.error.message}\n` +
-          (error.error.details ? `Details: ${JSON.stringify(error.error.details)}\n` : "");
+      errorsSection = `\n--- Errors Encountered (${errors.length}) ---\n\n`;
+      errorsSection += errors.map((errorItem, index) => {
+        const projectName = errorItem.project?.name || `Input project at index ${errorItem.index}`;
+        return `${index + 1}. Error for project: "${projectName}"\n` +
+          `   Error Code: ${errorItem.error.code}\n` +
+          `   Message: ${errorItem.error.message}` +
+          (errorItem.error.details ? `\n   Details: ${JSON.stringify(errorItem.error.details)}` : "");
       }).join("\n\n");
     }
     
-    return `${summary}\n\n${createdSection}\n\n${errorsSection}`.trim();
+    return `${summary}${createdSection}${errorsSection}`.trim();
   }
 }
 
 /**
  * Create a formatted, human-readable response for the atlas_project_create tool
  * 
- * @param data The raw project creation response data
- * @param isError Whether this response represents an error condition
+ * @param data The raw project creation response data (SingleProjectResponse or BulkProjectResponse)
+ * @param isError Whether this response represents an error condition (primarily for single responses)
  * @returns Formatted MCP tool response with appropriate structure
  */
 export function formatProjectCreateResponse(data: any, isError = false): any {
-  // Determine if this is a single or bulk project response
-  const isBulkResponse = data.hasOwnProperty("success") && data.hasOwnProperty("created");
+  const isBulkResponse = data.hasOwnProperty("success") && data.hasOwnProperty("created") && data.hasOwnProperty("errors");
   
+  let formattedText: string;
+  let finalIsError: boolean;
+
   if (isBulkResponse) {
-    return createFormattedResponse(data, new BulkProjectFormatter(), isError);
+    const formatter = new BulkProjectFormatter();
+    const bulkData = data as BulkProjectResponse;
+    formattedText = formatter.format(bulkData);
+    finalIsError = !bulkData.success || bulkData.errors.length > 0;
   } else {
-    return createFormattedResponse(data, new SingleProjectFormatter(), isError);
+    const formatter = new SingleProjectFormatter();
+    // For single response, the 'data' is the project object itself.
+    // 'isError' must be determined by the caller if an error occurred before this point.
+    // If 'data' represents a successfully created project, isError should be false.
+    formattedText = formatter.format(data as SingleProjectResponse);
+    finalIsError = isError; 
   }
+  return createToolResponse(formattedText, finalIsError);
 }

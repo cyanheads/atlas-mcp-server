@@ -1,11 +1,11 @@
 import { SearchResultItem } from "../../../services/neo4j/searchService.js";
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { McpToolResponse, createToolResponse } from "../../../types/mcp.js";
 import { UnifiedSearchResponse } from "./types.js";
 
 /**
  * Formatter for unified search responses
  */
-export class UnifiedSearchFormatter implements ResponseFormatter<UnifiedSearchResponse> {
+class UnifiedSearchFormatter {
   // The input 'responseData' should match the UnifiedSearchResponse type structure.
   format(responseData: UnifiedSearchResponse): string { 
     // Destructure the 'results' property as defined in UnifiedSearchResponse
@@ -125,6 +125,8 @@ export class UnifiedSearchFormatter implements ResponseFormatter<UnifiedSearchRe
  * @param isError Whether this response represents an error condition
  * @returns Formatted MCP tool response with appropriate structure
  */
-export function formatUnifiedSearchResponse(data: UnifiedSearchResponse, isError = false): any {
-  return createFormattedResponse(data, new UnifiedSearchFormatter(), isError);
+export function formatUnifiedSearchResponse(data: UnifiedSearchResponse, isError = false): McpToolResponse {
+  const formatter = new UnifiedSearchFormatter();
+  const formattedText = formatter.format(data);
+  return createToolResponse(formattedText, isError);
 }

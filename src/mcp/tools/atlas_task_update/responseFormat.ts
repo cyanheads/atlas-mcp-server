@@ -1,5 +1,4 @@
-import { TaskResponse } from "../../../types/mcp.js";
-import { ResponseFormatter, createFormattedResponse } from "../../../utils/responseFormatter.js";
+import { TaskResponse, McpToolResponse, createToolResponse } from "../../../types/mcp.js";
 
 /**
  * Extends the TaskResponse to include Neo4j properties structure 
@@ -35,7 +34,7 @@ interface BulkTaskResponse {
 /**
  * Formatter for individual task update responses
  */
-export class SingleTaskUpdateFormatter implements ResponseFormatter<SingleTaskResponse> {
+class SingleTaskUpdateFormatter {
   format(data: SingleTaskResponse): string {
     // Extract task properties from Neo4j structure
     const taskData = data.properties || data;
@@ -107,7 +106,7 @@ export class SingleTaskUpdateFormatter implements ResponseFormatter<SingleTaskRe
 /**
  * Formatter for bulk task update responses
  */
-export class BulkTaskUpdateFormatter implements ResponseFormatter<BulkTaskResponse> {
+class BulkTaskUpdateFormatter {
   format(data: BulkTaskResponse): string {
     const { success, message, updated, errors } = data;
     
@@ -160,13 +159,17 @@ export class BulkTaskUpdateFormatter implements ResponseFormatter<BulkTaskRespon
  * @param isError Whether this response represents an error condition
  * @returns Formatted MCP tool response with appropriate structure
  */
-export function formatTaskUpdateResponse(data: any, isError = false): any {
+export function formatTaskUpdateResponse(data: any, isError = false): McpToolResponse {
   // Determine if this is a single or bulk task response
   const isBulkResponse = data.hasOwnProperty("success") && data.hasOwnProperty("updated");
   
+  let formattedText: string;
   if (isBulkResponse) {
-    return createFormattedResponse(data, new BulkTaskUpdateFormatter(), isError);
+    const formatter = new BulkTaskUpdateFormatter();
+    formattedText = formatter.format(data as BulkTaskResponse);
   } else {
-    return createFormattedResponse(data, new SingleTaskUpdateFormatter(), isError);
+    const formatter = new SingleTaskUpdateFormatter();
+    formattedText = formatter.format(data as SingleTaskResponse);
   }
+  return createToolResponse(formattedText, isError);
 }
