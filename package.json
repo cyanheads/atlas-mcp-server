@@ -1,6 +1,6 @@
 {
   "name": "atlas-mcp-server",
-  "version": "2.7.3",
+  "version": "2.8.0",
   "description": "A Model Context Protocol (MCP) server for ATLAS, a Neo4j-powered task management system for LLM Agents - implementing a three-tier architecture (Projects, Tasks, Knowledge) to manage complex workflows.",
   "type": "module",
   "main": "dist/index.js",
@@ -44,10 +44,11 @@
   "author": "@cyanheads",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.2",
+    "@modelcontextprotocol/sdk": "^1.11.1",
     "@types/express": "^5.0.1",
-    "@types/node": "^22.15.2",
+    "@types/node": "^22.15.17",
     "@types/node-cron": "^3.0.11",
+    "chrono-node": "^2.8.0",
     "commander": "^13.1.0",
     "cross-env": "^7.0.3",
     "date-fns": "^4.1.0",
@@ -56,10 +57,15 @@
     "fuzzysort": "^3.1.0",
     "nanoid": "^5.1.5",
     "neo4j-driver": "^5.28.1",
-    "node-cron": "^3.0.3",
+    "node-cron": "^4.0.3",
     "node-schedule": "^2.1.1",
+    "openai": "^4.98.0",
+    "partial-json": "^0.1.7",
+    "sanitize-html": "^2.16.0",
+    "tiktoken": "^1.0.21",
+    "validator": "^13.15.0",
     "winston": "^3.17.0",
-    "zod": "^3.24.3"
+    "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/node-schedule": "^2.1.7",
