@@ -1,6 +1,6 @@
 # atlas-mcp-server - Directory Structure
 
-Generated on: 2025-04-25 15:04:50
+Generated on: 2025-05-11 23:00:08
 
 
 ```
@@ -108,6 +108,11 @@ atlas-mcp-server
     │   │   │   ├── responseFormat.ts
     │   │   │   ├── types.ts
     │   │   │   └── unifiedSearch.ts
+    │   ├── transports
+    │   │   ├── authentication
+    │   │   │   └── authMiddleware.ts
+    │   │   ├── httpTransport.ts
+    │   │   └── stdioTransport.ts
     │   └── server.ts
     ├── services
     │   └── neo4j
@@ -127,11 +132,24 @@ atlas-mcp-server
     │   ├── mcp.ts
     │   └── tool.ts
     ├── utils
-    │   ├── errorHandler.ts
-    │   ├── idGenerator.ts
-    │   ├── logger.ts
-    │   ├── responseFormatter.ts
-    │   └── security.ts
+    │   ├── internal
+    │   │   ├── errorHandler.ts
+    │   │   ├── index.ts
+    │   │   ├── logger.ts
+    │   │   └── requestContext.ts
+    │   ├── metrics
+    │   │   ├── index.ts
+    │   │   └── tokenCounter.ts
+    │   ├── parsing
+    │   │   ├── dateParser.ts
+    │   │   ├── index.ts
+    │   │   └── jsonParser.ts
+    │   ├── security
+    │   │   ├── idGenerator.ts
+    │   │   ├── index.ts
+    │   │   ├── rateLimiter.ts
+    │   │   └── sanitization.ts
+    │   └── index.ts
     ├── .DS_Store
     └── index.ts
 ├── .clinerules
