@@ -18,9 +18,9 @@ export class KnowledgeService {
   /**
    * Add a new knowledge item
    * @param knowledge Input data, potentially including domain and citations for relationship creation
-   * @returns The created knowledge item (without domain/citations properties)
+   * @returns The created knowledge item, including its domain and citations.
    */
-  static async addKnowledge(knowledge: Omit<Neo4jKnowledge, 'id' | 'createdAt' | 'updatedAt'> & { id?: string; domain?: string; citations?: string[] }): Promise<Neo4jKnowledge> {
+  static async addKnowledge(knowledge: Omit<Neo4jKnowledge, 'id' | 'createdAt' | 'updatedAt'> & { id?: string; domain?: string; citations?: string[] }): Promise<Neo4jKnowledge & { domain: string | null; citations: string[] }> {
     const session = await neo4jDriver.getSession();
     
     try {
@@ -56,8 +56,9 @@ export class KnowledgeService {
         ON CREATE SET d.createdAt = $createdAt
         CREATE (k)-[:${RelationshipTypes.BELONGS_TO_DOMAIN}]->(d)
         
-        // Return only the properties defined in Neo4jKnowledge
-        RETURN k.id as id, k.projectId as projectId, k.text as text, k.tags as tags, k.createdAt as createdAt, k.updatedAt as updatedAt
+        // Return properties including domain name
+        WITH k, d
+        RETURN k.id as id, k.projectId as projectId, k.text as text, k.tags as tags, k.createdAt as createdAt, k.updatedAt as updatedAt, d.name as domainName
       `;
       
       const params = {
@@ -82,7 +83,7 @@ export class KnowledgeService {
       }
       
       // Construct the Neo4jKnowledge object from the returned record
-      const createdKnowledge: Neo4jKnowledge = {
+      const baseKnowledge: Neo4jKnowledge = {
         id: createdKnowledgeRecord.get('id'),
         projectId: createdKnowledgeRecord.get('projectId'),
         text: createdKnowledgeRecord.get('text'),
@@ -91,19 +92,27 @@ export class KnowledgeService {
         updatedAt: createdKnowledgeRecord.get('updatedAt')
       };
       
+      const domainName = createdKnowledgeRecord.get('domainName') as string | null;
+      let actualCitations: string[] = [];
+
       // Process citations using the input 'knowledge' object
       const inputCitations = knowledge.citations;
       if (inputCitations && Array.isArray(inputCitations) && inputCitations.length > 0) {
         await this.addCitations(knowledgeId, inputCitations);
+        actualCitations = inputCitations; // Assume these are the citations for the response
       }
       
       logger.info('Knowledge item created successfully', { 
-        knowledgeId: createdKnowledge.id,
+        knowledgeId: baseKnowledge.id,
         projectId: knowledge.projectId
       });
       
-      // Return the object matching the Neo4jKnowledge interface
-      return createdKnowledge;
+      // Return the extended object with domain and citations
+      return {
+        ...baseKnowledge,
+        domain: domainName || knowledge.domain || null, // Fallback to input domain if query somehow misses it
+        citations: actualCitations
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Error creating knowledge item', { error: errorMessage, knowledgeInput: knowledge }); // Log input separately
