@@ -1,6 +1,6 @@
 # atlas-mcp-server - Directory Structure
 
-Generated on: 2025-05-11 23:23:31
+Generated on: 2025-05-11 23:54:16
 
 
 ```
