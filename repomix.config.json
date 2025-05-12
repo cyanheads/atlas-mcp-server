@@ -12,7 +12,9 @@
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
-    "customPatterns": []
+    "customPatterns": [
+      ".clinerules"
+    ]
   },
   "security": {
     "enableSecurityCheck": true
