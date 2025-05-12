@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New Dependencies & Scripts**: Added `ignore`, `winston-daily-rotate-file`, `yargs` as core dependencies, and `axios`, `js-yaml`, `typedoc` as development dependencies. Introduced new npm scripts for enhanced development workflows, including `docs:generate`, `fetch-spec`, `inspector`, `start:http`, and `start:stdio`.
 - **OpenAPI Spec Fetching**: Added a new script `scripts/fetch-openapi-spec.ts` to retrieve OpenAPI specifications, likely for documentation or client generation.
 - **Raw JSON for Unified Search**: The `atlas_unified_search` tool can now return raw JSON responses when specified, offering more flexibility for programmatic consumption.
+- **Development Tooling**: Added `smithery.yaml`
 
 ### Changed
 
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Standardized logger imports in database scripts to use barrel files.
   - Enhanced error logging in `db-import.ts`.
   - Changed default `BACKUP_FILE_DIR` in `src/config/index.ts` to `./atlas-backups` and corrected `fs` import order.
+  - Updated `repomix.config.json` to ignore `.clinerules` and ensure a trailing newline.
 - **Project Version**: Bumped version from 2.7.3 to 2.8.0.
 - **Dependency Updates**:
   - Updated `@modelcontextprotocol/sdk` to `^1.11.1`.
@@ -48,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configuration Loading**: Improved project root detection and backup directory handling with enhanced security checks.
 - **Developer Guidelines**: Significantly updated the developer cheat sheet (`.clinerules`) with comprehensive guidelines on request context, logging, error handling, sanitization, and an expanded repository structure overview.
 - **`atlas_deep_research` Tool**: (Moved from Unreleased) Introduced a new MCP tool (`atlas_deep_research`) designed to initiate and structure deep research processes within the Atlas knowledge base. This tool allows users to define a primary research topic, goal, and scope, and break it down into manageable sub-topics with initial search queries. It creates a hierarchical knowledge graph in Neo4j, consisting of a root 'research-plan' node and child 'research-subtopic' nodes, facilitating organized research efforts. The tool supports client-provided IDs, domain categorization, initial tagging, and flexible response formatting (formatted string or raw JSON). Core logic resides in `src/mcp/tools/atlas_deep_research/deepResearch.ts`, with input validation using Zod schemas in `types.ts` and response formatting handled in `responseFormat.ts`. An example demonstrating its usage and output can be found in the [`examples/deep-research-example/`](./examples/deep-research-example/) directory.
-- **Package Metadata**: Updated `package.json` with `files` directive, repository details (`repository`, `bugs`, `homepage`), and expanded keywords for better discoverability.
+- **Package Metadata**: Updated `package.json` with `files` directive, repository details (`repository`, `bugs`, `homepage`), an updated project description, and expanded keywords for better discoverability.
 - **Knowledge Service Response**: The `KnowledgeService.addKnowledge` method now includes the `domain` name and `citations` in its response, providing more comprehensive data.
 - **Task Service Response**: The `TaskService.createTask` method now includes `assignedToUserId` in its response, directly providing the assignee's identifier.
 
