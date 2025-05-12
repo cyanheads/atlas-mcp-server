@@ -1,0 +1,110 @@
+startCommand:
+  type: stdioOrHttp # Allow user to choose transport type
+  configSchema:
+    type: object
+    properties:
+      NEO4J_URI:
+        type: string
+        description: "Neo4j connection URI (e.g., bolt://localhost:7687)"
+        default: "bolt://localhost:7687"
+      NEO4J_USER:
+        type: string
+        description: "Neo4j username"
+        default: "neo4j"
+      NEO4J_PASSWORD:
+        type: string
+        description: "Neo4j password"
+        format: "password" # For secure input in UIs
+        default: "password2"
+      LOG_LEVEL:
+        type: string
+        description: "Log level for the server"
+        enum:
+          [
+            "emerg",
+            "alert",
+            "crit",
+            "error",
+            "warning",
+            "notice",
+            "info",
+            "debug",
+          ]
+        default: "info"
+      NODE_ENV:
+        type: string
+        description: "Node environment"
+        enum: ["development", "production"]
+        default: "development"
+      MCP_HTTP_HOST:
+        type: string
+        description: "Host for HTTP transport (if selected)"
+        default: "127.0.0.1"
+      MCP_HTTP_PORT:
+        type: integer # Changed to integer for better validation
+        description: "Port for HTTP transport (if selected)"
+        default: 3010
+      MCP_ALLOWED_ORIGINS:
+        type: string # Comma-separated string
+        description: "Optional: Comma-separated list of allowed origins for HTTP CORS (e.g., http://localhost:3000,https://your-client.com)"
+        default: ""
+      MCP_AUTH_SECRET_KEY:
+        type: string
+        description: "Optional: Secret key for JWT authentication if HTTP transport is used (min 32 chars)"
+        format: "password" # For secure input in UIs
+        default: ""
+      MCP_RATE_LIMIT_WINDOW_MS:
+        type: integer
+        description: "Rate limit window in milliseconds for HTTP transport"
+        default: 60000
+      MCP_RATE_LIMIT_MAX_REQUESTS:
+        type: integer
+        description: "Max requests per window per IP for HTTP transport"
+        default: 100
+      BACKUP_MAX_COUNT:
+        type: integer
+        description: "Maximum number of backup sets to keep"
+        default: 10
+      BACKUP_FILE_DIR:
+        type: string
+        description: "Directory where backup files will be stored (relative to project root)"
+        default: "./atlas-backups"
+    required: # Define required fields based on README defaults and common usage
+      - NEO4J_URI
+      - NEO4J_USER
+      - NEO4J_PASSWORD
+      - LOG_LEVEL
+      - NODE_ENV
+
+  commandFunction: |
+    (config, transportType) => {
+      const env = {
+        NEO4J_URI: config.NEO4J_URI,
+        NEO4J_USER: config.NEO4J_USER,
+        NEO4J_PASSWORD: config.NEO4J_PASSWORD,
+        LOG_LEVEL: config.LOG_LEVEL,
+        NODE_ENV: config.NODE_ENV,
+        MCP_TRANSPORT_TYPE: transportType, // 'stdio' or 'http'
+        MCP_HTTP_HOST: config.MCP_HTTP_HOST,
+        MCP_HTTP_PORT: String(config.MCP_HTTP_PORT), // Ensure it's a string for env var
+        MCP_ALLOWED_ORIGINS: config.MCP_ALLOWED_ORIGINS,
+        MCP_AUTH_SECRET_KEY: config.MCP_AUTH_SECRET_KEY,
+        MCP_RATE_LIMIT_WINDOW_MS: String(config.MCP_RATE_LIMIT_WINDOW_MS),
+        MCP_RATE_LIMIT_MAX_REQUESTS: String(config.MCP_RATE_LIMIT_MAX_REQUESTS),
+        BACKUP_MAX_COUNT: String(config.BACKUP_MAX_COUNT),
+        BACKUP_FILE_DIR: config.BACKUP_FILE_DIR,
+      };
+
+      // Remove undefined or empty string values to avoid passing them as env vars
+      for (const key in env) {
+        if (env[key] === undefined || env[key] === "") {
+          delete env[key];
+        }
+      }
+
+      return {
+        "command": "node",
+        "args": ["dist/index.js"],
+        "env": env
+      };
+    }
