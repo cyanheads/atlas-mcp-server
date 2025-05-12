@@ -1,5 +1,5 @@
 import { parse as parsePartialJson, Allow as PartialJsonAllow } from 'partial-json';
-import { BaseErrorCode, McpError } from '../../types-global/errors.js';
+import { BaseErrorCode, McpError } from '../../types/errors.js';
 // Import utils from the main barrel file (logger, RequestContext from ../internal/*)
 import { logger, RequestContext } from '../index.js';
 

@@ -1,7 +1,7 @@
 import path from 'path';
 import sanitizeHtml from 'sanitize-html';
 import validator from 'validator';
-import { BaseErrorCode, McpError } from '../../types-global/errors.js';
+import { BaseErrorCode, McpError } from '../../types/errors.js';
 // Import utils from the main barrel file (logger from ../internal/logger.js)
 import { logger } from '../index.js';
 

@@ -1,4 +1,4 @@
-import { logger } from '../../utils/logger.js';
+import { logger } from '../../utils/index.js'; // Updated import path
 import { neo4jDriver } from './driver.js';
 import { buildListQuery, generateId } from './helpers.js'; // Import buildListQuery
 import {
@@ -350,7 +350,7 @@ export class ProjectService {
       // Use buildListQuery helper
       // Note: searchTerm filter is not currently supported by buildListQuery
       if (options.searchTerm) {
-        logger.warn('searchTerm filter is not currently supported in getProjects when using buildListQuery helper.');
+        logger.warning('searchTerm filter is not currently supported in getProjects when using buildListQuery helper.');
       }
 
       const { countQuery, dataQuery, params } = buildListQuery(
@@ -561,7 +561,7 @@ export class ProjectService {
       if (result) {
         logger.info('Project dependency removed successfully', { dependencyId });
       } else {
-        logger.warn('Dependency not found or not removed', { dependencyId });
+        logger.warning('Dependency not found or not removed', { dependencyId });
       }
       
       return result;

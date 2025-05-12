@@ -1,5 +1,5 @@
 import { int } from 'neo4j-driver'; // Import 'int' for pagination
-import { logger } from '../../utils/logger.js';
+import { logger } from '../../utils/index.js'; // Updated import path
 import { neo4jDriver } from './driver.js';
 import { generateId, buildListQuery } from './helpers.js'; // Import buildListQuery
 import {
@@ -159,7 +159,7 @@ export class TaskService {
       const knowledgeExists = await Neo4jUtils.nodeExists(NodeLabels.Knowledge, 'id', knowledgeId);
 
       if (!taskExists || !knowledgeExists) {
-        logger.warn(`Cannot link: Task (${taskId} exists: ${taskExists}) or Knowledge (${knowledgeId} exists: ${knowledgeExists}) not found.`);
+        logger.warning(`Cannot link: Task (${taskId} exists: ${taskExists}) or Knowledge (${knowledgeId} exists: ${knowledgeExists}) not found.`);
         return false;
       }
 
@@ -182,7 +182,7 @@ export class TaskService {
       if (linkCreated) {
         logger.info(`Successfully linked task ${taskId} to knowledge ${knowledgeId} with type ${relationshipType}`);
       } else {
-        logger.warn(`Failed to link task ${taskId} to knowledge ${knowledgeId} (MERGE returned no relationship)`);
+        logger.warning(`Failed to link task ${taskId} to knowledge ${knowledgeId} (MERGE returned no relationship)`);
       }
 
       return linkCreated;
@@ -693,7 +693,7 @@ export class TaskService {
       if (result) {
         logger.info('Task dependency removed successfully', { dependencyId });
       } else {
-        logger.warn('Task dependency not found or not removed', { dependencyId });
+        logger.warning('Task dependency not found or not removed', { dependencyId });
       }
       
       return result;

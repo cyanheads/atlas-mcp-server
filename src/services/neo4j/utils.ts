@@ -1,4 +1,4 @@
-import { logger } from '../../utils/logger.js';
+import { logger } from '../../utils/index.js'; // Updated import path
 import { neo4jDriver } from './driver.js';
 import { NodeLabels, PaginatedResult, PaginationOptions, RelationshipTypes } from './types.js';
 import { Record as Neo4jRecord } from 'neo4j-driver'; // Import Record type
@@ -54,7 +54,7 @@ export class Neo4jUtils {
             // Especially full-text might not be supported/enabled
             const errorMessage = error instanceof Error ? error.message : String(error);
             if (query.includes("FULLTEXT")) {
-              logger.warn(`Could not create full-text index (potentially unsupported): ${errorMessage}. Query: ${query}`);
+              logger.warning(`Could not create full-text index (potentially unsupported): ${errorMessage}. Query: ${query}`);
             } else {
               logger.error(`Failed to execute schema query: ${errorMessage}. Query: ${query}`);
               // Rethrow for critical constraints/indexes
@@ -81,7 +81,7 @@ export class Neo4jUtils {
   static async clearDatabase(): Promise<void> {
     const session = await neo4jDriver.getSession();
     try {
-      logger.warn('Clearing all data from Neo4j database');
+      logger.warning('Clearing all data from Neo4j database');
       
       // Delete all nodes and relationships
       await session.executeWrite(async tx => {

@@ -4,7 +4,7 @@ import { stat } from "fs/promises"; // Use async stat
 import { Session } from "neo4j-driver";
 import path from "path";
 import { config } from "../../config/index.js";
-import { logger } from "../../utils/logger.js";
+import { logger } from "../../utils/index.js"; // Updated import path
 import { neo4jDriver } from "./driver.js";
 
 // Helper function to escape relationship types for Cypher queries
@@ -40,7 +40,7 @@ const manageBackupRotation = async (): Promise<void> => {
 
   // Use the validated backup root path
   if (!existsSync(validatedBackupRoot)) {
-    logger.warn(`Backup root directory does not exist: ${validatedBackupRoot}. Skipping rotation.`);
+    logger.warning(`Backup root directory does not exist: ${validatedBackupRoot}. Skipping rotation.`);
     return;
   }
 
@@ -65,7 +65,7 @@ const manageBackupRotation = async (): Promise<void> => {
         } catch (statError: any) {
           // Log specific error if stat fails (e.g., permission denied) but ignore ENOENT (Not Found)
           if (statError.code !== 'ENOENT') {
-            logger.warn(`Could not stat potential backup directory ${potentialDirPath}: ${statError.message}. Skipping.`);
+            logger.warning(`Could not stat potential backup directory ${potentialDirPath}: ${statError.message}. Skipping.`);
           }
         }
         return null;
@@ -232,7 +232,7 @@ export const exportDatabase = async (): Promise<string> => {
       } else {
           try {
             rmSync(backupDir, { recursive: true, force: true });
-            logger.warn(`Removed partially created backup directory due to export failure: ${backupDir}`);
+            logger.warning(`Removed partially created backup directory due to export failure: ${backupDir}`);
           } catch (rmError) {
             const rmErrorMsg = rmError instanceof Error ? rmError.message : String(rmError);
             logger.error(`Failed to remove partial backup directory ${backupDir}: ${rmErrorMsg}`);
@@ -275,7 +275,7 @@ export const importDatabase = async (backupDirInput: string): Promise<void> => {
   // --- End Validation ---
 
   let session: Session | null = null; // Initialize session variable
-  logger.warn(`Starting database import from validated directory ${backupDir}. THIS WILL OVERWRITE ALL EXISTING DATA.`);
+  logger.warning(`Starting database import from validated directory ${backupDir}. THIS WILL OVERWRITE ALL EXISTING DATA.`);
 
   try {
     session = await neo4jDriver.getSession(); // Get session from singleton
@@ -343,7 +343,7 @@ export const importDatabase = async (backupDirInput: string): Promise<void> => {
       for (const nodeFile of nodeFiles) {
         const filePath = secureResolve(backupDir, nodeFile); // Securely resolve path
         if (!filePath) {
-            logger.warn(`Skipping potentially insecure node file path: ${nodeFile} in ${backupDir}`);
+            logger.warning(`Skipping potentially insecure node file path: ${nodeFile} in ${backupDir}`);
             continue;
         }
         
@@ -354,7 +354,7 @@ export const importDatabase = async (backupDirInput: string): Promise<void> => {
           : inferredLabelFromFile.charAt(0).toUpperCase() + inferredLabelFromFile.slice(1);
 
         if (!existsSync(filePath)) { // Check validated path
-          logger.warn(`Node file ${nodeFile} (inferred label ${label}) not found at ${filePath}. Skipping.`);
+          logger.warning(`Node file ${nodeFile} (inferred label ${label}) not found at ${filePath}. Skipping.`);
           continue;
         }
 
@@ -389,7 +389,7 @@ export const importDatabase = async (backupDirInput: string): Promise<void> => {
           logger.info(`No relationships found to import in ${relFilePath}.`);
         }
       } else {
-        logger.warn(`Relationships file not found or path invalid: ${relFilePath}. Skipping relationship import.`);
+        logger.warning(`Relationships file not found or path invalid: ${relFilePath}. Skipping relationship import.`);
       }
     }
 
@@ -408,7 +408,7 @@ export const importDatabase = async (backupDirInput: string): Promise<void> => {
             logger.debug(`Executing relationship creation transaction batch ${i / batchSize + 1}...`);
             for (const rel of batch) {
               if (!rel.startNodeId || !rel.endNodeId || !rel.type) {
-                logger.warn(`Skipping relationship due to missing data: ${JSON.stringify(rel)}`);
+                logger.warning(`Skipping relationship due to missing data: ${JSON.stringify(rel)}`);
                 failedCount++;
                 continue;
               }

@@ -1,7 +1,7 @@
 import * as chrono from 'chrono-node';
 // Import utils from the main barrel file (logger, ErrorHandler, RequestContext from ../internal/*)
 import { logger, ErrorHandler, RequestContext } from '../index.js';
-import { McpError, BaseErrorCode } from '../../types-global/errors.js'; // Corrected path
+import { McpError, BaseErrorCode } from '../../types/errors.js'; // Corrected path
 
 /**
  * Parses a natural language date string into a Date object.
@@ -36,7 +36,7 @@ async function parseDateString(
       operation,
       context: logContext,
       input: { text, refDate },
-      errorCode: BaseErrorCode.PARSING_ERROR,
+      errorCode: BaseErrorCode.VALIDATION_ERROR,
     }
   );
 }
@@ -69,7 +69,7 @@ async function parseDateStringDetailed(
       operation,
       context: logContext,
       input: { text, refDate },
-      errorCode: BaseErrorCode.PARSING_ERROR,
+      errorCode: BaseErrorCode.VALIDATION_ERROR,
     }
   );
 }

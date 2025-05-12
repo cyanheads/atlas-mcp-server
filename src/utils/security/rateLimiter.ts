@@ -1,4 +1,4 @@
-import { BaseErrorCode, McpError } from '../../types-global/errors.js';
+import { BaseErrorCode, McpError } from '../../types/errors.js';
 // Import config and utils
 import { environment } from '../../config/index.js'; // Import environment from config
 import { logger, RequestContext } from '../index.js';

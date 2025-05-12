@@ -1,5 +1,5 @@
 import { Session, int } from 'neo4j-driver'; // Import int
-import { logger } from '../../utils/logger.js';
+import { logger } from '../../utils/index.js'; // Updated import path
 import { neo4jDriver } from './driver.js';
 import {
   NodeLabels,
@@ -58,7 +58,7 @@ export class SearchService {
       
       const targetLabels = Array.isArray(entityTypes) ? entityTypes : [entityTypes];
       if (targetLabels.length === 0) {
-        logger.warn("Unified search called with empty entityTypes array. Returning empty results.");
+        logger.warning("Unified search called with empty entityTypes array. Returning empty results.");
         return Neo4jUtils.paginateResults([], { page, limit });
       }
 
@@ -81,7 +81,7 @@ export class SearchService {
 
       for (const label of targetLabels) {
         if (!label || typeof label !== 'string') {
-          logger.warn(`Skipping invalid label in entityTypes: ${label}`);
+          logger.warning(`Skipping invalid label in entityTypes: ${label}`);
           continue;
         }
         
@@ -107,7 +107,7 @@ export class SearchService {
         } else if (result.status === 'rejected') {
           logger.error(`Search promise rejected for label "${label}":`, { reason: result.reason });
         } else if (result.status === 'fulfilled') {
-           logger.warn(`Search promise fulfilled with non-array value for label "${label}":`, { value: result.value });
+           logger.warning(`Search promise fulfilled with non-array value for label "${label}":`, { value: result.value });
         }
       });
       
@@ -151,7 +151,7 @@ export class SearchService {
         case 'task': actualLabel = NodeLabels.Task; break;
         case 'knowledge': actualLabel = NodeLabels.Knowledge; break;
         default:
-          logger.warn(`Unsupported label provided to searchSingleLabel: ${labelInput}`);
+          logger.warning(`Unsupported label provided to searchSingleLabel: ${labelInput}`);
           return []; 
       }
       
@@ -184,7 +184,7 @@ export class SearchService {
       }
 
       if (!searchProperty) {
-         logger.warn(`Could not determine a default search property for label ${actualLabel}. Returning empty results.`);
+         logger.warning(`Could not determine a default search property for label ${actualLabel}. Returning empty results.`);
          return [];
       }
       
@@ -526,7 +526,7 @@ export class SearchService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('Error performing full-text search', { error: errorMessage, searchValue, options });
       if (errorMessage.includes("Unable to find index")) {
-         logger.warn("Full-text index might not be configured correctly or supported in this Neo4j version.");
+         logger.warning("Full-text index might not be configured correctly or supported in this Neo4j version.");
          throw new Error(`Full-text search failed: Index not found or query error. (${errorMessage})`);
       }
       throw error;

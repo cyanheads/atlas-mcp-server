@@ -1,6 +1,6 @@
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { encoding_for_model, Tiktoken, TiktokenModel } from 'tiktoken';
-import { BaseErrorCode, McpError } from '../../types-global/errors.js';
+import { BaseErrorCode, McpError } from '../../types/errors.js';
 // Import utils from the main barrel file (ErrorHandler, logger, RequestContext from ../internal/*)
 import { ErrorHandler, logger, RequestContext } from '../index.js';
 

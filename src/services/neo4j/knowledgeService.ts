@@ -1,4 +1,4 @@
-import { logger } from '../../utils/logger.js';
+import { logger } from '../../utils/index.js'; // Updated import path
 import { neo4jDriver } from './driver.js';
 import { generateId } from './helpers.js';
 import {
@@ -130,7 +130,7 @@ export class KnowledgeService {
       const targetExists = await Neo4jUtils.nodeExists(NodeLabels.Knowledge, 'id', targetId);
 
       if (!sourceExists || !targetExists) {
-        logger.warn(`Cannot link knowledge: Source (${sourceId} exists: ${sourceExists}) or Target (${targetId} exists: ${targetExists}) not found.`);
+        logger.warning(`Cannot link knowledge: Source (${sourceId} exists: ${sourceExists}) or Target (${targetId} exists: ${targetExists}) not found.`);
         return false;
       }
 
@@ -154,7 +154,7 @@ export class KnowledgeService {
       if (linkCreated) {
         logger.info(`Successfully linked knowledge ${sourceId} to ${targetId} with type ${relationshipType}`);
       } else {
-        logger.warn(`Failed to link knowledge ${sourceId} to ${targetId} (MERGE returned no relationship)`);
+        logger.warning(`Failed to link knowledge ${sourceId} to ${targetId} (MERGE returned no relationship)`);
       }
 
       return linkCreated;

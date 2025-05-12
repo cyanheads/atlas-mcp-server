@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID as cryptoRandomUUID } from 'crypto'; // Import cryptoRandomUUID
-import { BaseErrorCode, McpError } from '../../types-global/errors.js'; // Corrected path
+import { BaseErrorCode, McpError } from '../../types/errors.js'; // Corrected path
 // Import utils from the main barrel file (logger from ../internal/logger.js)
 import { logger } from '../index.js';
 

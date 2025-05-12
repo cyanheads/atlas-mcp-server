@@ -5,7 +5,17 @@
  * carrying a unique ID, timestamp, and other relevant information for logging, tracing,
  * and processing.
  */
-import { BaseErrorCode, McpError } from '../../types-global/errors.js';
+import { 
+  BaseErrorCode, 
+  McpError,
+  ProjectErrorCode,
+  TaskErrorCode,
+  NoteErrorCode,
+  LinkErrorCode,
+  MemberErrorCode,
+  SkillErrorCode,
+  DatabaseExportImportErrorCode
+} from '../../types/errors.js';
 import { sanitizeInputForLogging } from '../index.js';
 import { logger } from './logger.js';
 
@@ -188,13 +198,11 @@ const ERROR_TYPE_MAPPINGS: Readonly<Record<string, BaseErrorCode>> = {
  */
 const COMMON_ERROR_PATTERNS: ReadonlyArray<Readonly<BaseErrorMapping>> = [
   { pattern: /auth|unauthorized|unauthenticated|not.*logged.*in|invalid.*token|expired.*token/i, errorCode: BaseErrorCode.UNAUTHORIZED },
-  { pattern: /permission|forbidden|access.*denied|not.*allowed/i, errorCode: BaseErrorCode.FORBIDDEN },
+  { pattern: /permission|forbidden|access.*denied|not.*allowed/i, errorCode: BaseErrorCode.PERMISSION_DENIED },
   { pattern: /not.*found|missing|no.*such|doesn't.*exist|couldn't.*find/i, errorCode: BaseErrorCode.NOT_FOUND },
   { pattern: /invalid|validation|malformed|bad request|wrong format|missing.*required/i, errorCode: BaseErrorCode.VALIDATION_ERROR },
-  { pattern: /conflict|already.*exists|duplicate|unique.*constraint/i, errorCode: BaseErrorCode.CONFLICT },
+  // CONFLICT, TIMEOUT, SERVICE_UNAVAILABLE are no longer in BaseErrorCode
   { pattern: /rate.*limit|too.*many.*requests|throttled/i, errorCode: BaseErrorCode.RATE_LIMITED },
-  { pattern: /timeout|timed.*out|deadline.*exceeded/i, errorCode: BaseErrorCode.TIMEOUT },
-  { pattern: /service.*unavailable|bad.*gateway|gateway.*timeout|upstream.*error/i, errorCode: BaseErrorCode.SERVICE_UNAVAILABLE },
 ];
 
 /**
@@ -280,7 +288,7 @@ export class ErrorHandler {
   /**
    * Determines an appropriate `BaseErrorCode` for a given error.
    */
-  public static determineErrorCode(error: unknown): BaseErrorCode {
+  public static determineErrorCode(error: unknown): BaseErrorCode | ProjectErrorCode | TaskErrorCode | NoteErrorCode | LinkErrorCode | MemberErrorCode | SkillErrorCode | DatabaseExportImportErrorCode {
     if (error instanceof McpError) {
       return error.code;
     }
@@ -322,7 +330,7 @@ export class ErrorHandler {
     const originalStack = error instanceof Error ? error.stack : undefined;
 
     let finalError: Error;
-    let loggedErrorCode: BaseErrorCode;
+    let loggedErrorCode: BaseErrorCode | ProjectErrorCode | TaskErrorCode | NoteErrorCode | LinkErrorCode | MemberErrorCode | SkillErrorCode | DatabaseExportImportErrorCode;
 
     // Consolidate details for McpError and logging
     const errorDetailsSeed = error instanceof McpError && typeof error.details === 'object' && error.details !== null
@@ -440,7 +448,7 @@ export class ErrorHandler {
     }
 
     return {
-      code: BaseErrorCode.UNKNOWN_ERROR,
+      code: BaseErrorCode.INTERNAL_ERROR, // Changed from UNKNOWN_ERROR
       message: getErrorMessage(error),
       details: { errorType: getErrorName(error) },
     };
