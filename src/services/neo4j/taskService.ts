@@ -20,7 +20,7 @@ export class TaskService {
    * @param task Task data, including optional assignedTo for relationship creation
    * @returns The created task
    */
-  static async createTask(task: Omit<Neo4jTask, 'id' | 'createdAt' | 'updatedAt'> & { id?: string; assignedTo?: string }): Promise<Neo4jTask> {
+  static async createTask(task: Omit<Neo4jTask, 'id' | 'createdAt' | 'updatedAt'> & { id?: string; assignedTo?: string }): Promise<Neo4jTask & { assignedToUserId?: string | null }> {
     const session = await neo4jDriver.getSession();
     
     try {
@@ -61,13 +61,15 @@ export class TaskService {
         ${assignedToUserId ? `MERGE (u:${NodeLabels.User} {id: $assignedToUserId}) ON CREATE SET u.createdAt = $createdAt CREATE (t)-[:${RelationshipTypes.ASSIGNED_TO}]->(u)` : ''}
         
         // Return properties defined in Neo4jTask
+        WITH t // Ensure t is in scope before optional match
+        OPTIONAL MATCH (t)-[:${RelationshipTypes.ASSIGNED_TO}]->(assigned_user:${NodeLabels.User}) // Match to get assigned user's ID
         RETURN t.id as id,
                t.projectId as projectId,
                t.title as title,
                t.description as description,
                t.priority as priority,
                t.status as status,
-               // assignedTo removed
+               assigned_user.id as assignedToUserId, // Add this
                t.urls as urls,
                t.tags as tags,
                t.completionRequirements as completionRequirements,
@@ -110,7 +112,7 @@ export class TaskService {
       }
       
       // Construct the Neo4jTask object - deserialize urls
-      const createdTaskData: Neo4jTask = {
+      const createdTaskData: Neo4jTask & { assignedToUserId?: string | null } = {
         id: result.get('id'),
         projectId: result.get('projectId'),
         title: result.get('title'),
@@ -123,7 +125,8 @@ export class TaskService {
         outputFormat: result.get('outputFormat'),
         taskType: result.get('taskType'),
         createdAt: result.get('createdAt'),
-        updatedAt: result.get('updatedAt')
+        updatedAt: result.get('updatedAt'),
+        assignedToUserId: result.get('assignedToUserId') || null
       };
       
       logger.info('Task created successfully', { 
