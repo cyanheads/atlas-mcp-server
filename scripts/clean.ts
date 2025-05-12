@@ -17,7 +17,7 @@
  *   - Works on all platforms (Windows, macOS, Linux) using Node.js path normalization
  */
 
-import { rm, access } from 'fs/promises';
+import { access, rm } from 'fs/promises';
 import { join } from 'path';
 
 /**
