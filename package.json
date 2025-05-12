@@ -1,7 +1,7 @@
 {
   "name": "atlas-mcp-server",
   "version": "2.8.0",
-  "description": "A Model Context Protocol (MCP) server for ATLAS, a Neo4j-powered task management system for LLM Agents - implementing a three-tier architecture (Projects, Tasks, Knowledge) to manage complex workflows.",
+  "description": "ATLAS (Adaptive Task & Logic Automation System): An MCP server enabling LLM agents to manage projects, tasks, and knowledge via a Neo4j-backed, three-tier architecture. Facilitates complex workflow automation and project management through LLM Agents.",
   "type": "module",
   "main": "dist/index.js",
   "files": [
@@ -36,12 +36,12 @@
     "tree": "ts-node --esm scripts/tree.ts"
   },
   "keywords": [
-    "AI-integration",
+    "ai-integration",
     "agent",
     "atlas",
     "authentication",
     "automation",
-    "client",
+    "client-server",
     "collaboration",
     "dependency-tracking",
     "graph-database",
@@ -51,21 +51,16 @@
     "llm",
     "llm-agent",
     "mcp",
-    "MCP",
     "model-context-protocol",
+    "model-context-protocol-server",
     "neo4j",
-    "neo4j-integration",
     "project-management",
-    "project-tracking",
-    "sdk",
     "server",
-    "sse",
-    "task-automation",
     "task-management",
-    "template",
     "three-tier-architecture",
     "typescript",
-    "unified-search"
+    "unified-search",
+    "workflow-automation"
   ],
   "author": "@cyanheads",
   "license": "Apache-2.0",
