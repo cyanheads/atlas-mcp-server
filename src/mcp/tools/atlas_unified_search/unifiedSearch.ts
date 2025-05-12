@@ -97,9 +97,13 @@ export const atlasUnifiedSearch = async (
       totalPages: searchResults.totalPages
     };
 
-    // Format and return the response
-    // formatUnifiedSearchResponse expects UnifiedSearchResponse which has 'results' property
-    return formatUnifiedSearchResponse(responseData);
+    // Format and return the response based on requested format
+    if (validatedInput.responseFormat === ResponseFormat.JSON) {
+      return responseData; // Return raw JSON data
+    } else {
+      // Default to formatted or if 'formatted' is explicitly requested
+      return formatUnifiedSearchResponse(responseData);
+    }
 
   } catch (error) {
     // Log the specific error message and stack if available
