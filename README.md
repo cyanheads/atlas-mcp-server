@@ -64,6 +64,7 @@ Implemented as a Model Context Protocol (MCP) server, ATLAS allows LLM agents to
 - [Overview](#overview)
 - [Features](#features)
 - [Installation](#installation)
+- [Running the Server](#running-the-server)
 - [Configuration](#configuration)
 - [Project Structure](#project-structure)
 - [Tools](#tools)
@@ -121,37 +122,58 @@ The Atlas Platform integrates these components into a cohesive system:
 
 ## Installation
 
-1. Clone the repository:
+1.  **Clone the repository:**
 
-```bash
-git clone https://github.com/cyanheads/atlas-mcp-server.git
-cd atlas-mcp-server
-```
+    ```bash
+    git clone https://github.com/cyanheads/atlas-mcp-server.git
+    cd atlas-mcp-server
+    ```
 
-2. Install dependencies:
+2.  **Install dependencies:**
 
-```bash
-npm install
-```
+    ```bash
+    npm install
+    ```
 
-3. Configure Neo4j:
+3.  **Configure Neo4j:**
+    Ensure you have a Neo4j instance running and accessible. You can start one using the provided Docker configuration:
 
-```bash
-# Start Neo4j using Docker
-docker-compose up -d
-```
+    ```bash
+    docker-compose up -d
+    ```
 
-4. Build the project:
+    Update your `.env` file with the Neo4j connection details.
 
-```bash
-npm run build
-```
+4.  **Build the project:**
+    ```bash
+    npm run build
+    ```
+
+## Running the Server
+
+Most MCP Clients run the server automatically, but you can also run it manually for testing or development purposes using the following commands.
+
+ATLAS MCP Server supports multiple transport mechanisms for communication:
+
+- **Standard I/O (stdio):** This is the default mode and is typically used for direct integration with local MCP clients (like IDE extensions).
+
+  ```bash
+  npm run start:stdio
+  ```
+
+  This uses the `MCP_TRANSPORT_TYPE=stdio` setting.
+
+- **Streamable HTTP:** This mode allows the server to listen for MCP requests over HTTP, suitable for remote clients or web-based integrations.
+  ```bash
+  npm run start:http
+  ```
+  This uses the `MCP_TRANSPORT_TYPE=http` setting. The server will listen on the host and port defined in your `.env` file (e.g., `MCP_HTTP_HOST` and `MCP_HTTP_PORT`, defaulting to `127.0.0.1:3010`). Ensure your firewall allows connections if accessing remotely.
 
 ## Configuration
 
 ### Environment Variables
 
-Create a `.env` file based on `.env.example`:
+Environment variables should be set in the client config in your MCP Client.
 
 ```bash
 # Neo4j Configuration
@@ -160,31 +182,81 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=password2
 
 # Application Configuration
-LOG_LEVEL=info # debug, info, warn, error
-NODE_ENV=development # development, production
+LOG_LEVEL=info # Log level for the server (corresponds to MCP_LOG_LEVEL). Options: emerg, alert, crit, error, warning, notice, info, debug.
+NODE_ENV=development # 'development' or 'production'.
+
+# MCP Transport Configuration
+MCP_TRANSPORT_TYPE=stdio # 'stdio' or 'http'. Default: stdio.
+MCP_HTTP_HOST=127.0.0.1 # Host for HTTP transport. Default: 127.0.0.1.
+MCP_HTTP_PORT=3010 # Port for HTTP transport. Default: 3010.
+# MCP_ALLOWED_ORIGINS=http://localhost:someport,https://your-client.com # Optional: Comma-separated list of allowed origins for HTTP CORS.
+
+# MCP Security Configuration
+# MCP_AUTH_SECRET_KEY=your_very_long_and_secure_secret_key_min_32_chars # Optional: Secret key for JWT authentication if HTTP transport is used.
+MCP_RATE_LIMIT_WINDOW_MS=60000 # Rate limit window in milliseconds. Default: 60000 (1 minute).
+MCP_RATE_LIMIT_MAX_REQUESTS=100 # Max requests per window per IP for HTTP transport. Default: 100.
+
+# Database Backup Configuration
+BACKUP_MAX_COUNT=10 # Maximum number of backup sets to keep. Default: 10.
+BACKUP_FILE_DIR=./backups # Directory where backup files will be stored (relative to project root). Default: ./backups.
 ```
+
+Refer to `src/config/index.ts` for all available environment variables and their default values.
 
 ### MCP Client Settings
 
-Add to your MCP client settings:
+How you configure your MCP client depends on the client itself and the chosen transport type.
+
+**For Stdio Transport:**
+Typically, you'll configure the client to execute the server's start script.
 
 ```json
 {
   "mcpServers": {
-    "atlas": {
+    "atlas-mcp-server-stdio": {
       "command": "node",
-      "args": ["/path/to/atlas-mcp-server/dist/index.js"],
+      "args": ["/full/path/to/atlas-mcp-server/dist/index.js"],
       "env": {
         "NEO4J_URI": "bolt://localhost:7687",
         "NEO4J_USER": "neo4j",
         "NEO4J_PASSWORD": "password2",
         "LOG_LEVEL": "info",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "MCP_TRANSPORT_TYPE": "stdio" // Ensure this is set for stdio
       }
     }
   }
 }
 ```
+
+**For HTTP Transport:**
+If your client supports connecting to an MCP server via an HTTP URL, you would typically provide the server's endpoint (e.g., `http://localhost:3010/mcp`).
+
+If your client launches the server for HTTP mode:
+
+```json
+{
+  "mcpServers": {
+    "atlas-mcp-server-http": {
+      "command": "node",
+      "args": ["/full/path/to/atlas-mcp-server/dist/index.js"],
+      "env": {
+        "NEO4J_URI": "bolt://localhost:7687",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "password2",
+        "LOG_LEVEL": "info",
+        "NODE_ENV": "production",
+        "MCP_TRANSPORT_TYPE": "http", // Crucial for HTTP mode
+        "MCP_HTTP_PORT": "3010", // Ensure this matches your server's .env
+        "MCP_HTTP_HOST": "127.0.0.1" // Ensure this matches your server's .env
+        // "MCP_AUTH_SECRET_KEY": "your-secure-token" // If authentication is enabled on the server
+      }
+    }
+  }
+}
+```
+
+**Note:** Always use absolute paths for `args` when configuring client commands if the server is not in the client's immediate working directory. The `MCP_AUTH_SECRET_KEY` in the client's `env` block is illustrative; actual token handling for client-to-server communication would depend on the client's capabilities and the server's authentication mechanism (e.g., sending a JWT in an `Authorization` header).
 
 ## Project Structure
 
@@ -200,10 +272,8 @@ src/
 ├── services/        # Core application services
 │   └── neo4j/       # Neo4j database services (index.ts, driver.ts, backupRestoreService.ts, etc.)
 ├── types/           # Shared TypeScript type definitions (errors.ts, mcp.ts, tool.ts)
-└── utils/           # Utility functions (logger.ts, errorHandler.ts, etc.)
+└── utils/           # Utility functions and internal services (e.g., logger, errorHandler, sanitization)
 ```
-
-_Note: ID generation logic is primarily located in `src/services/neo4j/helpers.ts`._
 
 ## Tools
 
@@ -281,12 +351,12 @@ ATLAS provides functionality to back up and restore the Neo4j database content. 
 
 ### Automatic Backups (Note)
 
-**Important:** The automatic backup functionality has been removed due to inefficiency. The call to `triggerBackgroundBackup` in `src/services/neo4j/driver.ts` is commented out with a note indicating it was removed. Please use the manual backup process described below to protect your data.
+**Important:** The automatic backup functionality has been removed due to inefficiency. Please use the manual backup process described below to protect your data.
 
 ### Backup Process
 
 - **Mechanism**: The backup process exports all `Project`, `Task`, and `Knowledge` nodes, along with their relationships, into separate JSON files.
-- **Output**: Each backup creates a timestamped directory (e.g., `atlas-backup-YYYYMMDDHHMMSS`) within the configured backup path (default: `./atlas-backups/`). This directory contains `projects.json`, `tasks.json`, `knowledge.json`, and `relationships.json`.
+- **Output**: Each backup creates a timestamped directory (e.g., `atlas-backup-YYYYMMDDHHMMSS`) within the configured backup path (default: `./backups/`). This directory contains `projects.json`, `tasks.json`, `knowledge.json`, and `relationships.json`.
 - **Manual Backup**: You can trigger a manual backup using the provided script:
   ```bash
   npm run db:backup
@@ -301,7 +371,7 @@ ATLAS provides functionality to back up and restore the Neo4j database content. 
   ```bash
   npm run db:import <path_to_backup_directory>
   ```
-  Replace `<path_to_backup_directory>` with the actual path to the backup folder (e.g., `./atlas-backups/atlas-backup-20250326120000`). This command executes `scripts/db-import.ts`, which calls the `importDatabase` function.
+  Replace `<path_to_backup_directory>` with the actual path to the backup folder (e.g., `./backups/atlas-backup-20250326120000`). This command executes `scripts/db-import.ts`, which calls the `importDatabase` function.
 - **Relationship Handling**: The import process attempts to recreate relationships based on the `id` properties stored within the nodes during export. Ensure your nodes have consistent `id` properties for relationships to be restored correctly.
 
 ## Examples
