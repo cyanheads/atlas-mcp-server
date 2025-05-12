@@ -1,6 +1,6 @@
 # atlas-mcp-server - Directory Structure
 
-Generated on: 2025-05-12 00:32:03
+Generated on: 2025-05-12 00:56:49
 
 
 ```
@@ -22,6 +22,7 @@ atlas-mcp-server
     ├── clean.ts
     ├── db-backup.ts
     ├── db-import.ts
+    ├── fetch-openapi-spec.ts
     ├── make-executable.ts
     └── tree.ts
 ├── src

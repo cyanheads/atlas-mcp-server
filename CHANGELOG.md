@@ -46,7 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Knowledge Service Response**: The `KnowledgeService.addKnowledge` method now includes the `domain` name and `citations` in its response, providing more comprehensive data.
 - **Task Service Response**: The `TaskService.createTask` method now includes `assignedToUserId` in its response, directly providing the assignee's identifier.
 
-
 ### Fixed
 
 - **Documentation**: Updated the `docs/tree.md` to reflect the latest directory structure timestamp and changes from recent refactoring.
