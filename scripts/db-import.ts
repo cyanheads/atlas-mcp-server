@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url'; // Added for ESM __dirname equivalent
 import { importDatabase } from '../src/services/neo4j/backupRestoreService.js';
 import { closeNeo4jConnection } from '../src/services/neo4j/index.js';
-import { logger } from '../src/utils/logger.js';
+import { logger } from '../src/utils/index.js';
 
 /**
  * DB Import Script
@@ -58,13 +58,13 @@ const isValidBackupDir = (backupDir: string): boolean => {
     if (!resolvedFilePath.startsWith(resolvedBackupDir + path.sep)) {
         logger.error(`Invalid file path detected: ${resolvedFilePath} is outside the backup directory ${resolvedBackupDir}`);
         // Decide how to handle: warning or failure. Let's warn for now.
-        logger.warn(`Skipping check for potentially unsafe file path: ${resolvedFilePath}`);
+        logger.warning(`Skipping check for potentially unsafe file path: ${resolvedFilePath}`);
         continue; // Skip check for this file
     }
 
     if (!existsSync(resolvedFilePath)) {
       // Log a warning but don't necessarily fail, maybe some are empty
-      logger.warn(`Expected backup file not found: ${resolvedFilePath}. Import might be incomplete.`);
+      logger.warning(`Expected backup file not found: ${resolvedFilePath}. Import might be incomplete.`);
     }
   }
   return true;
@@ -86,7 +86,7 @@ const runManualImport = async () => {
   const resolvedBackupDir = path.resolve(userInputPath); // Resolve once for consistent use
 
   logger.info(`Attempting manual database import from: ${resolvedBackupDir}`);
-  logger.warn('!!! THIS WILL OVERWRITE ALL EXISTING DATA IN THE DATABASE !!!');
+  logger.warning('!!! THIS WILL OVERWRITE ALL EXISTING DATA IN THE DATABASE !!!');
 
   // Validate the resolved path
   if (!isValidBackupDir(resolvedBackupDir)) { // Pass the already resolved path
@@ -98,7 +98,9 @@ const runManualImport = async () => {
     await importDatabase(resolvedBackupDir);
     logger.info(`Manual import from ${resolvedBackupDir} completed successfully.`);
   } catch (error) {
-    logger.error('Manual database import failed:', { error });
+    // Ensure we log an actual Error object and provide context
+    const errorToLog = error instanceof Error ? error : new Error(error === null ? "Encountered a null error" : JSON.stringify(error));
+    logger.error('Manual database import failed:', errorToLog, { backupDir: resolvedBackupDir });
     process.exitCode = 1; // Indicate failure
   } finally {
     // Ensure the Neo4j connection is closed after the script runs

@@ -20,8 +20,8 @@
   "homepage": "https://github.com/cyanheads/atlas-mcp-server#readme",
   "scripts": {
     "build": "tsc && node --loader ts-node/esm scripts/make-executable.ts dist/index.js",
-    "db:backup": "ts-node --esm scripts/db-backup.ts",
-    "db:import": "ts-node --esm scripts/db-import.ts",
+    "db:backup": "node --loader ts-node/esm scripts/db-backup.ts",
+    "db:import": "node --loader ts-node/esm scripts/db-import.ts",
     "dev": "tsc -w",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",

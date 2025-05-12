@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { exportDatabase } from '../src/services/neo4j/backupRestoreService.js';
 import { closeNeo4jConnection } from '../src/services/neo4j/index.js';
-import { logger } from '../src/utils/logger.js';
+import { logger } from '../src/utils/index.js';
 
 /**
  * Manual backup script entry point.

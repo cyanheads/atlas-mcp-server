@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { readFileSync, mkdirSync, existsSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import path, { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { z } from 'zod';
@@ -71,7 +71,7 @@ const EnvSchema = z.object({
   NEO4J_USER: z.string().default("neo4j"),
   NEO4J_PASSWORD: z.string().default("password"),
 
-  BACKUP_FILE_DIR: z.string().default(path.join(projectRoot, "backups")), // Default relative to project root
+  BACKUP_FILE_DIR: z.string().default(path.join(projectRoot, "atlas-backups")), // Default relative to project root
   BACKUP_MAX_COUNT: z.coerce.number().int().min(0).default(10),
 });
 
