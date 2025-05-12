@@ -107,9 +107,26 @@ export const atlasCreateTask = async (
 
       // Conditionally format response
       if (validatedInput.responseFormat === ResponseFormat.JSON) {
-        return createToolResponse(JSON.stringify(results, null, 2));
+        const mappedCreatedTasks = results.created.map(t => {
+          const { assignedToUserId, ...restOfTask } = t; // t will have assignedToUserId from service
+          return { ...restOfTask, assignedTo: assignedToUserId || undefined };
+        });
+        const responsePayload = {
+          ...results,
+          created: mappedCreatedTasks,
+        };
+        return createToolResponse(JSON.stringify(responsePayload, null, 2));
       } else {
-        return formatTaskCreateResponse(results);
+        // Assuming formatTaskCreateResponse can handle the raw 'results' or we map similarly
+        const mappedCreatedTasksForFormatting = results.created.map(t => {
+          const { assignedToUserId, ...restOfTask } = t;
+          return { ...restOfTask, assignedTo: assignedToUserId || undefined };
+        });
+        const formattedResponsePayload = {
+            ...results,
+            created: mappedCreatedTasksForFormatting,
+        };
+        return formatTaskCreateResponse(formattedResponsePayload);
       }
     } else {
       // Process single task creation
@@ -172,9 +189,19 @@ export const atlasCreateTask = async (
 
       // Conditionally format response
       if (validatedInput.responseFormat === ResponseFormat.JSON) {
-        return createToolResponse(JSON.stringify(task, null, 2));
+        const { assignedToUserId, ...restOfTask } = task; // task from service has assignedToUserId
+        const responsePayload = {
+          ...restOfTask,
+          assignedTo: assignedToUserId || undefined,
+        };
+        return createToolResponse(JSON.stringify(responsePayload, null, 2));
       } else {
-        return formatTaskCreateResponse(task);
+        const { assignedToUserId, ...restOfTask } = task;
+        const formattedResponsePayload = {
+            ...restOfTask,
+            assignedTo: assignedToUserId || undefined,
+        };
+        return formatTaskCreateResponse(formattedResponsePayload);
       }
     }
   } catch (error) {
