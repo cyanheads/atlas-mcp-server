@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **README Updates**: Improved clarity, accuracy, and formatting of the README.md. Updated tool descriptions, Neo4j setup instructions, and environment variable explanations.
+- **Scripts & Configuration**:
+  - Updated `db:backup` and `db:import` scripts in `package.json` to use `node --loader ts-node/esm`.
+  - Standardized logger imports in database scripts to use barrel files.
+  - Enhanced error logging in `db-import.ts`.
+  - Changed default `BACKUP_FILE_DIR` in `src/config/index.ts` to `./atlas-backups` and corrected `fs` import order.
 - **Project Version**: Bumped version from 2.7.3 to 2.8.0.
 - **Dependency Updates**:
   - Updated `@modelcontextprotocol/sdk` to `^1.11.1`.
