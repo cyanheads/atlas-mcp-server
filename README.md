@@ -71,6 +71,7 @@ Implemented as a Model Context Protocol (MCP) server, ATLAS allows LLM agents to
 - [Tools](#tools)
 - [Resources](#resources)
 - [Database Backup and Restore](#database-backup-and-restore)
+- [Task Trellis MCP Integration](#task-trellis-mcp-integration)
 - [Examples](#examples)
 - [License](#license)
 
@@ -364,6 +365,27 @@ ATLAS provides functionality to back up and restore the Neo4j database content. 
   ```
   Replace `<path_to_backup_directory>` with the actual path to the backup folder (e.g., `./atlas-backups/atlas-backup-20250326120000`). This command executes `src/services/neo4j/backupRestoreService/scripts/db-import.ts`, which calls the `importDatabase` function.
 - **Relationship Handling**: The import process attempts to recreate relationships based on the `id` properties stored within the nodes during export. Ensure your nodes have consistent `id` properties for relationships to be restored correctly.
+
+## Task Trellis MCP Integration
+
+ATLAS can be used alongside **Task Trellis MCP** for complementary project and task management capabilities. Task Trellis provides markdown-based hierarchical task breakdown with file change tracking, while ATLAS offers graph database relationships and knowledge management.
+
+### Quick Start
+
+The repository includes an example configuration (`mcp.json`) that demonstrates how to run both ATLAS and Task Trellis MCP servers together. To use both:
+
+1. **Configure your MCP client** with both servers from `mcp.json`
+2. **Update Task Trellis paths** to point to your project directory
+3. **Use ATLAS for** high-level planning, knowledge management, and cross-project relationships
+4. **Use Task Trellis for** detailed task execution, file tracking, and workflow automation
+
+### Key Benefits of Using Both
+
+- **ATLAS**: Neo4j graph database, knowledge management, deep research, web UI
+- **Task Trellis**: Markdown storage, hierarchical tasks (Project → Epic → Feature → Task), file change tracking
+- **Together**: Best of both worlds - graph relationships + markdown simplicity
+
+For detailed integration instructions, workflows, and configuration examples, see the [Task Trellis Integration Guide](./docs/TRELLIS_INTEGRATION.md).
 
 ## Examples
 
