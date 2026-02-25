@@ -20,6 +20,20 @@
         "BACKUP_FILE_DIR": "./atlas-backups",
         "LOGS_DIR": "./logs"
       }
+    },
+    "task-trellis-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@langadventurellc/task-trellis-mcp",
+        "--projectRootFolder",
+        "/absolute/path/to/your/project",
+        "--trellisFolder",
+        ".trellis"
+      ],
+      "env": {
+        "NODE_ENV": "development"
+      }
     }
   }
 }
